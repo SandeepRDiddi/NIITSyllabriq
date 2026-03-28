@@ -1,0 +1,336 @@
+{
+  "meta": {
+    "name": "NIIT StackRoute Design Document Template",
+    "version": "1.0",
+    "source_file": "NIIT_Stackroute_Design Document Template.docx",
+    "owner": "NIIT Ltd / StackRoute",
+    "copyright": "© NIIT 2025-26",
+    "ip_notice": "All Information within this document is Intellectual property of NIIT (NIIT Ltd). No part of this document or the program design or program structure mentioned within can be shared or used within any organization without the permission of NIIT (NIIT Ltd)."
+  },
+
+  "typography": {
+    "default_font": "Candara",
+    "fallback_font": "Times New Roman",
+    "language": "en-IN",
+    "colors": {
+      "cover_title_orange":  "#E97132",
+      "section_heading_navy": "#0F4761",
+      "accent_blue": "#5B9BD4",
+      "body_text_black": "#000000",
+      "header_decoration_gray": "#C0C0C0",
+      "footer_text_black": "#000000"
+    },
+    "font_sizes_pt": {
+      "cover_title": 28,
+      "major_section_heading": 20,
+      "minor_section_heading": 14,
+      "section_label": 14,
+      "body_text": 12,
+      "bullet_list_text": 11,
+      "footer_text": 9,
+      "header_text": 10
+    },
+    "note": "All w:sz values in OOXML are half-points. e.g., sz=40 → 20pt, sz=28 → 14pt, sz=56 → 28pt, sz=22 → 11pt, sz=18 → 9pt"
+  },
+
+  "page_layout": {
+    "size": "A4",
+    "width_dxa": 11906,
+    "height_dxa": 16838,
+    "margins_dxa": {
+      "top": 1440,
+      "bottom": 1440,
+      "left": 1440,
+      "right": 1440
+    },
+    "content_width_dxa": 9026
+  },
+
+  "header": {
+    "present": true,
+    "description": "NIIT StackRoute logo anchored top-right, with gray decorative horizontal bar spanning the width",
+    "logo_image": "image3.png",
+    "logo_position": "top-right (absolute anchor)",
+    "decoration": "gray horizontal bar (freeform shape, color #C0C0C0)",
+    "font": "Candara",
+    "text_size_pt": 10,
+    "text_color": "#000000"
+  },
+
+  "footer": {
+    "present": true,
+    "layout": "three-column via tab stops",
+    "tab_stops_dxa": [4513, 9026],
+    "left_content": "© NIIT 2025-26",
+    "center_content": "",
+    "right_content": "Page {PAGE} of {NUMPAGES}",
+    "second_line": "All Information within this document is Intellectual property of NIIT (NIIT Ltd). No part of this document or the program design or program structure mentioned within can be shared or used within any organization without the permission of NIIT (NIIT Ltd).",
+    "font": "Candara",
+    "text_size_pt": 9,
+    "text_color": "#000000"
+  },
+
+  "cover_page": {
+    "order": 1,
+    "description": "Full-page visual cover. Not numbered.",
+    "elements": [
+      {
+        "type": "image",
+        "name": "background_robot_image",
+        "file": "image4.jpg",
+        "description": "Full-page AI robot image as visual background",
+        "position": "anchored, wraps both sides, behind=false",
+        "size_emu": { "cx": 7106285, "cy": 5658485 }
+      },
+      {
+        "type": "image",
+        "name": "stackroute_logo",
+        "file": "image2.png",
+        "description": "StackRoute logo, top right",
+        "position": "absolute top-right anchor",
+        "size_emu": { "cx": 1262187, "cy": 1374875 }
+      },
+      {
+        "type": "text",
+        "name": "course_title",
+        "placeholder": "Course: [Program Name]",
+        "variable": "program_name",
+        "format": "Course: {program_name}",
+        "font": "Candara",
+        "size_pt": 28,
+        "bold": true,
+        "color": "#E97132",
+        "alignment": "left"
+      },
+      {
+        "type": "note",
+        "name": "instruction_note",
+        "text": "[The sections mentioned in the document are indicative and additional sections like Case Study details, Capstone etc can be added based on the requirement]",
+        "font": "Candara",
+        "size_pt": 12,
+        "color": "#000000",
+        "visible_in_output": false,
+        "note": "This is a template instruction only — replace with actual content or remove"
+      }
+    ]
+  },
+
+  "document_sections": [
+    {
+      "order": 1,
+      "id": "program_intro",
+      "heading": "Program Introduction",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 20,
+      "heading_color": "#0F4761",
+      "heading_bold": false,
+      "heading_spacing": { "before_dxa": 360, "after_dxa": 80, "line": 259, "line_rule": "auto" },
+      "required": true,
+      "content_type": "paragraphs",
+      "content_placeholder": "[Brief Program introduction in 2-3 paragraphs]",
+      "content_format": {
+        "font": "Candara",
+        "size_pt": 12,
+        "color": "#000000",
+        "line_spacing": 276,
+        "line_rule": "auto",
+        "justification": "both"
+      },
+      "min_paragraphs": 2,
+      "max_paragraphs": 3
+    },
+    {
+      "order": 2,
+      "id": "indicative_design",
+      "heading": "Indicative Design and Content Coverage",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 20,
+      "heading_color": "#0F4761",
+      "heading_bold": false,
+      "required": true,
+      "content_type": "visual_summary",
+      "content_placeholder": "[Summary diagram or table of how content is organized across the program]",
+      "note": "This section provides a high-level visual or tabular overview of coverage"
+    },
+    {
+      "order": 3,
+      "id": "prerequisites",
+      "heading": "Pre-requisites",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 14,
+      "heading_color": "#0F4761",
+      "heading_bold": false,
+      "required": true,
+      "page_header_label": {
+        "text": "Course: [Program Name]",
+        "format": "Course: {program_name}",
+        "font": "Candara",
+        "size_pt": 14,
+        "bold": true,
+        "color": "#0F4761"
+      },
+      "total_duration_field": {
+        "label": "Total Duration",
+        "placeholder": "x Hours",
+        "variable": "total_duration_hours",
+        "format": "Total Duration: {total_duration_hours} Hours",
+        "font": "Candara",
+        "size_pt": 12,
+        "label_bold": true,
+        "value_bold": false
+      },
+      "content_type": "bullet_list",
+      "content_placeholder": "[Articulated in bullet points]",
+      "bullet_format": {
+        "numId": 4,
+        "ilvl": 0,
+        "font": "Candara",
+        "size_pt": 11,
+        "spacing_after_dxa": 160,
+        "line_spacing": 276,
+        "line_rule": "auto"
+      }
+    },
+    {
+      "order": 4,
+      "id": "key_outcomes",
+      "heading": "Key Outcomes",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 14,
+      "heading_color": "#0F4761",
+      "heading_bold": false,
+      "required": true,
+      "fixed_intro_text": "After completing this program, participants will be able to:",
+      "fixed_intro_format": {
+        "font": "Candara",
+        "size_pt": 12,
+        "color": "#000000",
+        "spacing_after_dxa": 200
+      },
+      "content_type": "bullet_list",
+      "content_placeholder": "[Articulated in bullet points — use action verbs: design, build, implement, analyze, etc.]",
+      "bullet_format": {
+        "numId": 4,
+        "ilvl": 0,
+        "font": "Candara",
+        "size_pt": 12,
+        "color": "#000000",
+        "spacing_after_dxa": 160,
+        "line_spacing": 276
+      }
+    },
+    {
+      "order": 5,
+      "id": "detailed_design",
+      "heading": "Detailed Design:",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 14,
+      "heading_color": "#0F4761",
+      "heading_bold": false,
+      "required": true,
+      "content_type": "table_preferred",
+      "content_placeholder": "[Detailed Program design in tabular(preferred)/descriptive format including Module Name, Sub-topics, Duration (in Hours), Hands-on, Tools Needs (if relevant)]",
+      "preferred_table_columns": [
+        { "name": "Module Name",        "required": true  },
+        { "name": "Sub-topics",         "required": true  },
+        { "name": "Duration (Hours)",   "required": true  },
+        { "name": "Hands-on",           "required": false },
+        { "name": "Tools Needed",       "required": false }
+      ],
+      "note": "Additional columns/rows may be added based on program requirements"
+    },
+    {
+      "order": 6,
+      "id": "learning_pedagogy",
+      "heading": "Learning Pedagogy",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 14,
+      "heading_color": "#0F4761",
+      "content_type": "fixed_boilerplate",
+      "editable": false,
+      "fixed_content": [
+        {
+          "type": "paragraph",
+          "text": "The pedagogic model is focused on experiential learning (In person and remote virtual learning) mode. Some expert mentors shall work with students through the program. Learning is in an environment that combines the convenience of anytime access with the intensity of mentoring."
+        },
+        {
+          "type": "paragraph",
+          "text": "The model combines the following elements:"
+        },
+        {
+          "type": "numbered_item",
+          "number": 1,
+          "text": "Instructor-led Live connects: These work on a fixed schedule with recorded versions available to people who missed them.",
+          "sub_bullets": [
+            "Sessions that provide context.",
+            "Sessions that demonstrate the usage of tools or technologies",
+            "Sessions with expert-led demonstrations that provide step-by-step guidance on critical tasks.",
+            "Sessions that explain best practices.",
+            "Sessions that explain common pitfalls/issues.",
+            "Sessions that discuss success stories, case studies and real-world scenarios that provide insight into the practical challenges and solutions."
+          ]
+        },
+        {
+          "type": "numbered_item",
+          "number": 2,
+          "text": "Reference learning material."
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "id": "about_stackroute",
+      "heading": "About StackRoute",
+      "heading_style": "Heading1",
+      "heading_font": "Candara",
+      "heading_size_pt": 14,
+      "heading_color": "#0F4761",
+      "content_type": "fixed_boilerplate",
+      "editable": false,
+      "fixed_content": [
+        {
+          "type": "paragraph_italic",
+          "text": "Established in August 2015, StackRoute® is an NIIT incubated venture. StackRoute provides disruptive IT Learning solutions that produce top-class full-stack developers & tech professionals with deep skills. We have evolved a mechanism of providing immersive experiences backed by mastery learning and individual tutoring that allows us to guarantee outcomes. As a digital transformation partner, StackRoute works with several large, mid & small global IT organizations, Global Incubation Centers (GICs), Global Capability Centers (GCCs) & product engineering teams."
+        }
+      ],
+      "logo_image": "image3.png",
+      "logo_position": "inline right"
+    }
+  ],
+
+  "optional_sections": [
+    {
+      "id": "case_study",
+      "heading": "Case Study Details",
+      "heading_style": "Heading1",
+      "note": "Add when program includes case studies"
+    },
+    {
+      "id": "capstone",
+      "heading": "Capstone",
+      "heading_style": "Heading1",
+      "note": "Add when program includes a capstone project"
+    }
+  ],
+
+  "generation_rules": {
+    "strict_section_order": true,
+    "allow_additional_sections": true,
+    "additional_sections_insertion_point": "before_learning_pedagogy",
+    "fixed_sections_not_editable": ["learning_pedagogy", "about_stackroute"],
+    "cover_page_always_first": true,
+    "page_numbers": "start_from_page_2",
+    "font_substitution_forbidden": true,
+    "color_substitution_forbidden": true,
+    "variables": {
+      "program_name": { "type": "string", "required": true,  "description": "Full program/course name" },
+      "total_duration_hours": { "type": "number", "required": true,  "description": "Total program duration in hours" }
+    }
+  }
+}
