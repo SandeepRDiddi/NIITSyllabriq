@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class GenerateDesignRequest(BaseModel):
     requested_by: str = "system"
+    primary_reviewer_emails: Optional[List[str]] = None
 
 
 class ReferenceRead(BaseModel):

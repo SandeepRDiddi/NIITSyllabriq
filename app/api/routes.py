@@ -71,6 +71,25 @@ def get_me(current_user: User = Depends(get_current_user)) -> UserRead:
     )
 
 
+@router.get("/users", response_model=List[UserRead])
+def list_users(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles(["admin"])),
+) -> List[UserRead]:
+    users = session.exec(select(User).order_by(User.created_at.asc())).all()
+    return [
+        UserRead(
+            id=u.id or 0,
+            email=u.email,
+            full_name=u.full_name,
+            role=u.role,
+            is_active=u.is_active,
+            created_at=u.created_at,
+        )
+        for u in users
+    ]
+
+
 @router.post("/users", response_model=UserRead)
 def create_user(
     payload: UserCreate,
@@ -311,7 +330,12 @@ def generate_design(
     current_user: User = Depends(require_roles(["admin", "designer"])),
 ) -> DesignRead:
     try:
-        design = design_service.generate_design(session, requirement_id, payload.requested_by or current_user.email)
+        design = design_service.generate_design(
+            session,
+            requirement_id,
+            payload.requested_by or current_user.email,
+            primary_reviewers=payload.primary_reviewer_emails or None,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _build_design_response(session, design)
@@ -386,9 +410,10 @@ def submit_review(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_roles(["admin", "primary_reviewer", "final_reviewer"])),
 ) -> ReviewTaskRead:
-    reviewer_name = current_user.email if current_user.role != "admin" else payload.reviewer_name
+    is_admin = current_user.role == "admin"
+    reviewer_name = current_user.email
     try:
-        task = design_service.submit_review(session, task_id, reviewer_name, payload.decision, payload.comments)
+        task = design_service.submit_review(session, task_id, reviewer_name, payload.decision, payload.comments, is_admin=is_admin)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ReviewTaskRead(
@@ -489,6 +514,23 @@ def seed_sample(
     session.commit()
     session.refresh(requirement)
     return MessageResponse(message="Sample requirement created", data={"requirement_id": requirement.id})
+
+
+@router.delete("/admin/reset-data", response_model=MessageResponse)
+def reset_all_data(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles(["admin"])),
+) -> MessageResponse:
+    """Delete all requirements, designs, reviews and events. Users are preserved. Admin only."""
+    from app.models.design import DesignDocument, RetrievedReference, ScoreCard
+    from app.models.requirement import Requirement
+    from app.models.review import ReviewTask
+    from app.models.training import WorkflowEvent, TrainingDocument
+    for model in [WorkflowEvent, ReviewTask, ScoreCard, RetrievedReference, DesignDocument, Requirement, TrainingDocument]:
+        for row in session.exec(select(model)).all():
+            session.delete(row)
+    session.commit()
+    return MessageResponse(message="All data cleared. Users preserved.", data={})
 
 
 @router.get("/reports/summary", response_model=ReportingSummaryRead)

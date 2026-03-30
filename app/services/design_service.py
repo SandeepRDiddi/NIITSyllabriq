@@ -96,7 +96,7 @@ class DesignService:
     # Public API
     # ------------------------------------------------------------------
 
-    def generate_design(self, session: Session, requirement_id: int, requested_by: str) -> DesignDocument:
+    def generate_design(self, session: Session, requirement_id: int, requested_by: str, primary_reviewers: list[str] | None = None) -> DesignDocument:
         requirement = session.get(Requirement, requirement_id)
         if not requirement:
             raise ValueError("Requirement not found")
@@ -176,7 +176,8 @@ class DesignService:
             )
         )
 
-        for reviewer in settings.primary_reviewer_list:
+        reviewer_list = primary_reviewers if primary_reviewers else settings.primary_reviewer_list
+        for reviewer in reviewer_list:
             session.add(
                 ReviewTask(
                     design_document_id=design.id or 0,
@@ -190,11 +191,11 @@ class DesignService:
         session.commit()
         return design
 
-    def submit_review(self, session: Session, task_id: int, reviewer_name: str, decision: str, comments: str) -> ReviewTask:
+    def submit_review(self, session: Session, task_id: int, reviewer_name: str, decision: str, comments: str, is_admin: bool = False) -> ReviewTask:
         task = session.get(ReviewTask, task_id)
         if not task:
             raise ValueError("Review task not found")
-        if task.reviewer_name != reviewer_name:
+        if not is_admin and task.reviewer_name != reviewer_name:
             raise ValueError("Reviewer does not match assigned task")
         if task.status == "APPROVED":
             return task

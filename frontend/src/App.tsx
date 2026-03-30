@@ -73,7 +73,7 @@ type ReportSummary = {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-type Tab = "training" | "requirements" | "designs" | "reviews" | "reports";
+type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "reports" | "users";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -109,8 +109,21 @@ export default function App() {
   });
   const [trainingForm, setTrainingForm] = useState({ title: "", file: null as File | null });
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("requirements");
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
+  const [clearing, setClearing] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // User management
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [userForm, setUserForm] = useState({ email: "", full_name: "", role: "primary_reviewer", password: "" });
+
+  // Reviewer picker — shown as inline modal before generation
+  const [reviewerPick, setReviewerPick] = useState<{
+    reqId: number | null;
+    reqTitle: string;
+    selectedReviewers: string[];
+    andGenerate: boolean;
+  }>({ reqId: null, reqTitle: "", selectedReviewers: [], andGenerate: false });
 
   async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -158,7 +171,12 @@ export default function App() {
         setReviews([]);
       }
       if (me.role === "admin") {
-        setReportSummary(await api<ReportSummary>("/reports/summary"));
+        const [summary, users] = await Promise.all([
+          api<ReportSummary>("/reports/summary"),
+          api<User[]>("/users"),
+        ]);
+        setReportSummary(summary);
+        setAllUsers(users);
       }
     } catch {
       setToken("");
@@ -205,19 +223,20 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      notify(andGenerate ? "Requirement saved — generating design now…" : "Requirement saved successfully.", "success");
+      notify("Requirement saved successfully.");
+      const savedTitle = reqForm.title.trim();
       setReqForm({ customerName: "", title: "", totalDurationHours: "", source: "email", rawText: "" });
       await refreshDashboard();
       if (andGenerate) {
-        // Immediately trigger design generation for the just-created requirement
-        await api(`/designs/generate/${created.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requested_by: user?.email || "system" }),
+        // Open reviewer picker for the just-created requirement
+        const primaryUsers = allUsers.filter(u => ["primary_reviewer", "admin"].includes(u.role));
+        const defaultReviewer = primaryUsers.length > 0 ? primaryUsers[0].email : "";
+        setReviewerPick({
+          reqId: created.id,
+          reqTitle: savedTitle,
+          selectedReviewers: defaultReviewer ? [defaultReviewer] : [],
+          andGenerate: true,
         });
-        notify("Design generated and sent to primary reviewer.");
-        setActiveTab("designs");
-        await refreshDashboard();
       }
     } catch (err) {
       notify(`Failed: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -244,13 +263,40 @@ export default function App() {
     }
   }
 
-  async function generateDesign(requirementId: number) {
+  async function createUser(e: FormEvent) {
+    e.preventDefault();
+    if (!userForm.email || !userForm.full_name || !userForm.password) {
+      notify("Email, full name and password are required.", "error");
+      return;
+    }
     setLoading(true);
     try {
+      await api("/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userForm),
+      });
+      notify(`User ${userForm.email} created successfully.`);
+      setUserForm({ email: "", full_name: "", role: "primary_reviewer", password: "" });
+      await refreshDashboard();
+    } catch (err) {
+      notify(`Create user failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function generateDesign(requirementId: number, primaryReviewers?: string[]) {
+    setLoading(true);
+    try {
+      const body: Record<string, unknown> = { requested_by: user?.email || "system" };
+      if (primaryReviewers && primaryReviewers.length > 0) {
+        body.primary_reviewer_emails = primaryReviewers;
+      }
       await api(`/designs/generate/${requirementId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requested_by: user?.email || "system" }),
+        body: JSON.stringify(body),
       });
       notify("Design generated and submitted for primary review.");
       setActiveTab("designs");
@@ -260,6 +306,19 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function openReviewerPicker(reqId: number, reqTitle: string) {
+    const primaryUsers = allUsers.filter(u => ["primary_reviewer", "admin"].includes(u.role));
+    const defaultReviewer = primaryUsers.length > 0 ? primaryUsers[0].email : "";
+    setReviewerPick({ reqId, reqTitle, selectedReviewers: defaultReviewer ? [defaultReviewer] : [], andGenerate: false });
+  }
+
+  async function confirmGenerate() {
+    if (!reviewerPick.reqId) return;
+    const reviewers = reviewerPick.selectedReviewers.filter(Boolean);
+    setReviewerPick({ reqId: null, reqTitle: "", selectedReviewers: [], andGenerate: false });
+    await generateDesign(reviewerPick.reqId, reviewers.length > 0 ? reviewers : undefined);
   }
 
   async function submitReview(taskId: number, decision: "approve" | "reject") {
@@ -340,11 +399,27 @@ export default function App() {
   const canReview = ["admin", "primary_reviewer", "final_reviewer"].includes(user.role);
   const pendingReviews = reviews.filter((r) => r.status === "PENDING").length;
 
+  async function clearAllData() {
+    if (!window.confirm("This will permanently delete ALL requirements, designs, reviews and training documents. Users are kept. Continue?")) return;
+    setClearing(true);
+    try {
+      await api("/admin/reset-data", { method: "DELETE" });
+      notify("All data cleared. Starting fresh.", "success");
+      await refreshDashboard();
+    } catch (err) {
+      notify(`Clear failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: "dashboard", label: "🏠 Dashboard" },
     { id: "requirements", label: "Requirements" },
     { id: "designs", label: "Designs" },
     ...(canEdit ? [{ id: "training" as Tab, label: "Training Library" }] : []),
     ...(canReview ? [{ id: "reviews" as Tab, label: "Reviews", badge: pendingReviews }] : []),
+    ...(user.role === "admin" ? [{ id: "users" as Tab, label: "👥 Users" }] : []),
     ...(user.role === "admin" ? [{ id: "reports" as Tab, label: "Reports" }] : []),
   ];
 
@@ -386,10 +461,264 @@ export default function App() {
         ))}
       </nav>
 
+      {/* ── Reviewer Picker Modal ───────────────────────────────────────── */}
+      {reviewerPick.reqId !== null && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+            padding: 28, minWidth: 440, maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+          }}>
+            <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16, color: "var(--text)" }}>
+              Select Primary Reviewer
+            </p>
+            <p style={{ margin: "0 0 20px", color: "var(--muted)", fontSize: 13 }}>
+              for: <strong style={{ color: "var(--text)" }}>{reviewerPick.reqTitle}</strong>
+            </p>
+
+            {allUsers.filter(u => ["primary_reviewer", "admin"].includes(u.role)).length === 0 ? (
+              <div className="alert alert-info" style={{ marginBottom: 16 }}>
+                No primary_reviewer users found. <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setReviewerPick({ reqId: null, reqTitle: "", selectedReviewers: [], andGenerate: false }); setActiveTab("users"); }}>Create one →</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                {allUsers
+                  .filter(u => ["primary_reviewer", "admin"].includes(u.role))
+                  .map(u => {
+                    const checked = reviewerPick.selectedReviewers.includes(u.email);
+                    return (
+                      <label key={u.email} style={{
+                        display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                        borderRadius: 8, border: `1px solid ${checked ? "var(--accent)" : "var(--border)"}`,
+                        background: checked ? "rgba(91,155,212,0.08)" : "var(--surface2)",
+                        cursor: "pointer", fontSize: 14,
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const list = reviewerPick.selectedReviewers.includes(u.email)
+                              ? reviewerPick.selectedReviewers.filter(e => e !== u.email)
+                              : [...reviewerPick.selectedReviewers, u.email];
+                            setReviewerPick({ ...reviewerPick, selectedReviewers: list });
+                          }}
+                          style={{ accentColor: "var(--accent)", width: 16, height: 16 }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, color: "var(--text)" }}>{u.full_name}</div>
+                          <div style={{ color: "var(--muted)", fontSize: 12 }}>{u.email} · {u.role.replace(/_/g, " ")}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+              </div>
+            )}
+
+            <div className="row" style={{ gap: 10, justifyContent: "flex-end" }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setReviewerPick({ reqId: null, reqTitle: "", selectedReviewers: [], andGenerate: false })}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ background: "var(--red)", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+                disabled={loading}
+                onClick={confirmGenerate}
+              >
+                {loading ? "Generating…" : "⚡ Generate & Send for Review"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="content">
         {message && (
           <div className={`alert alert-${message.type}`}>
             {message.text}
+          </div>
+        )}
+
+        {/* ── Dashboard tab ────────────────────────── */}
+        {activeTab === "dashboard" && (
+          <div>
+            {/* Hero welcome bar */}
+            <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+                  Welcome back, {user.full_name.split(" ")[0]} 👋
+                </h2>
+                <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: 14 }}>
+                  Here's the live state of the design pipeline.
+                </p>
+              </div>
+              <div className="row" style={{ gap: 10 }}>
+                <button className="btn-secondary btn-sm" onClick={refreshDashboard} disabled={loading}>
+                  ↻ Refresh
+                </button>
+                {user.role === "admin" && (
+                  <button className="btn-danger btn-sm" onClick={clearAllData} disabled={clearing}>
+                    {clearing ? "Clearing…" : "🗑 Clear All Data"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Stat cards — 5 column grid */}
+            <div className="grid-5" style={{ marginBottom: 28 }}>
+              <div className="stat-card" style={{ "--card-accent": "var(--accent)" } as React.CSSProperties}>
+                <span className="stat-icon">📋</span>
+                <span className="stat-value">{requirements.length}</span>
+                <span className="stat-label">Requirements</span>
+                <span className="stat-sub">Total in system</span>
+              </div>
+              <div className="stat-card" style={{ "--card-accent": "#7c5cbf" } as React.CSSProperties}>
+                <span className="stat-icon">⚡</span>
+                <span className="stat-value">{designs.length}</span>
+                <span className="stat-label">Designs Generated</span>
+                <span className="stat-sub">All time</span>
+              </div>
+              <div className="stat-card" style={{ "--card-accent": "var(--warning)" } as React.CSSProperties}>
+                <span className="stat-icon">🔍</span>
+                <span className="stat-value">
+                  {designs.filter(d => ["UNDER_PRIMARY_REVIEW","UNDER_FINAL_REVIEW"].includes(d.status)).length}
+                </span>
+                <span className="stat-label">In Review</span>
+                <span className="stat-sub">Awaiting decision</span>
+              </div>
+              <div className="stat-card" style={{ "--card-accent": "var(--success)" } as React.CSSProperties}>
+                <span className="stat-icon">✅</span>
+                <span className="stat-value">
+                  {designs.filter(d => d.status === "FINAL_APPROVED").length}
+                </span>
+                <span className="stat-label">Approved</span>
+                <span className="stat-sub">Final sign-off</span>
+              </div>
+              <div className="stat-card" style={{ "--card-accent": "#f85149" } as React.CSSProperties}>
+                <span className="stat-icon">❌</span>
+                <span className="stat-value">
+                  {designs.filter(d => ["PRIMARY_REJECTED","FINAL_REWORK_REQUIRED"].includes(d.status)).length}
+                </span>
+                <span className="stat-label">Rejected / Rework</span>
+                <span className="stat-sub">Need attention</span>
+              </div>
+            </div>
+
+            {/* Two-column layout: pipeline status + activity feed */}
+            <div className="grid">
+              {/* Pipeline breakdown */}
+              <div className="panel">
+                <p className="panel-title">Pipeline Breakdown</p>
+                {designs.length === 0 ? (
+                  <div className="empty" style={{ padding: "24px 0" }}>No designs yet. Generate one from Requirements.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {[
+                      { label: "Pending Generation", key: "PENDING", color: "var(--muted)" },
+                      { label: "Under Primary Review", key: "UNDER_PRIMARY_REVIEW", color: "var(--warning)" },
+                      { label: "Under Final Review", key: "UNDER_FINAL_REVIEW", color: "var(--accent)" },
+                      { label: "Final Approved", key: "FINAL_APPROVED", color: "var(--success)" },
+                      { label: "Rework Required", key: "FINAL_REWORK_REQUIRED", color: "#d29922" },
+                      { label: "Rejected", key: "PRIMARY_REJECTED", color: "#f85149" },
+                    ].map(({ label, key, color }) => {
+                      const count = designs.filter(d => d.status === key).length;
+                      const pct = designs.length ? (count / designs.length) * 100 : 0;
+                      return (
+                        <div key={key}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, color: "var(--text)" }}>{label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color }}>{count}</span>
+                          </div>
+                          <div style={{ background: "var(--border)", borderRadius: 4, height: 6 }}>
+                            <div style={{ width: `${pct}%`, height: 6, borderRadius: 4, background: color, transition: "width 0.4s" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pending reviews callout */}
+                {pendingReviews > 0 && (
+                  <div className="alert alert-info" style={{ marginTop: 20, marginBottom: 0 }}>
+                    🔔 You have <strong>{pendingReviews}</strong> pending review{pendingReviews > 1 ? "s" : ""}.{" "}
+                    <span
+                      style={{ cursor: "pointer", textDecoration: "underline" }}
+                      onClick={() => setActiveTab("reviews")}
+                    >
+                      Go to Reviews →
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Recent activity feed */}
+              <div className="panel">
+                <p className="panel-title">Recent Activity</p>
+                {!reportSummary || reportSummary.recent_events.length === 0 ? (
+                  <div className="empty" style={{ padding: "24px 0" }}>No events recorded yet.</div>
+                ) : (
+                  <div>
+                    {reportSummary.recent_events.slice(0, 10).map((ev) => {
+                      const dotColor =
+                        ev.status === "SUCCESS" ? "var(--success)"
+                        : ev.status === "FAILED" ? "#f85149"
+                        : "var(--accent)";
+                      return (
+                        <div className="activity-item" key={ev.id}>
+                          <div className="activity-dot" style={{ background: dotColor }} />
+                          <div>
+                            <p className="activity-text">
+                              <strong>{ev.event_type.replace(/_/g, " ")}</strong>
+                              {" — "}{ev.entity_type} #{ev.entity_id}
+                            </p>
+                            <p className="activity-time">
+                              by {ev.actor_email} &nbsp;·&nbsp; {new Date(ev.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick-action cards (non-admin see only what's relevant) */}
+            <div className="grid-3" style={{ marginTop: 24 }}>
+              <div
+                className="stat-card"
+                style={{ cursor: "pointer", "--card-accent": "var(--red)" } as React.CSSProperties}
+                onClick={() => setActiveTab("requirements")}
+              >
+                <span className="stat-icon">➕</span>
+                <span className="stat-label">New Requirement</span>
+                <span className="stat-sub">Paste email or call notes</span>
+              </div>
+              <div
+                className="stat-card"
+                style={{ cursor: "pointer", "--card-accent": "var(--accent)" } as React.CSSProperties}
+                onClick={() => setActiveTab("designs")}
+              >
+                <span className="stat-icon">📄</span>
+                <span className="stat-label">View Designs</span>
+                <span className="stat-sub">Export MD / DOCX / PDF</span>
+              </div>
+              {canReview && (
+                <div
+                  className="stat-card"
+                  style={{ cursor: "pointer", "--card-accent": "var(--warning)" } as React.CSSProperties}
+                  onClick={() => setActiveTab("reviews")}
+                >
+                  <span className="stat-icon">🔍</span>
+                  <span className="stat-label">Review Queue</span>
+                  <span className="stat-sub">{pendingReviews} pending</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -524,8 +853,8 @@ export default function App() {
                           <td className="hint">{r.created_by}</td>
                           {canEdit && (
                             <td>
-                              <button className="btn-sm" onClick={() => generateDesign(r.id)} disabled={loading}>
-                                Generate Design
+                              <button className="btn-sm" onClick={() => openReviewerPicker(r.id, r.title)} disabled={loading}>
+                                ⚡ Generate Design
                               </button>
                             </td>
                           )}
@@ -702,6 +1031,111 @@ export default function App() {
                             <span className="hint">{r.comments || "—"}</span>
                           )}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Users tab ────────────────────────────── */}
+        {activeTab === "users" && user.role === "admin" && (
+          <div>
+            {/* Create user form */}
+            <div className="panel" style={{ marginBottom: 24 }}>
+              <p className="panel-title">Create New User</p>
+              <p className="hint" style={{ marginBottom: 16 }}>
+                Add designers, primary reviewers, or final reviewers. They will be available in the reviewer dropdown when generating designs.
+              </p>
+              <form onSubmit={createUser}>
+                <div className="grid" style={{ marginBottom: 12 }}>
+                  <div className="field">
+                    <label>Full Name <span style={{ color: "var(--red)" }}>*</span></label>
+                    <input
+                      value={userForm.full_name}
+                      onChange={e => setUserForm({ ...userForm, full_name: e.target.value })}
+                      placeholder="e.g. Priya Sharma"
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Email Address <span style={{ color: "var(--red)" }}>*</span></label>
+                    <input
+                      type="email"
+                      value={userForm.email}
+                      onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                      placeholder="e.g. priya.sharma@niit.com"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid" style={{ marginBottom: 16 }}>
+                  <div className="field">
+                    <label>Role <span style={{ color: "var(--red)" }}>*</span></label>
+                    <select
+                      value={userForm.role}
+                      onChange={e => setUserForm({ ...userForm, role: e.target.value })}
+                      style={{ height: 38, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", padding: "0 10px", fontSize: 14 }}
+                    >
+                      <option value="designer">Designer — creates and submits designs</option>
+                      <option value="primary_reviewer">Primary Reviewer — first approval gate</option>
+                      <option value="final_reviewer">Final Reviewer — final sign-off</option>
+                      <option value="admin">Admin — full access</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Password <span style={{ color: "var(--red)" }}>*</span></label>
+                    <input
+                      type="password"
+                      value={userForm.password}
+                      onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                      placeholder="Minimum 8 characters"
+                      required
+                    />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading} style={{ minWidth: 160 }}>
+                  {loading ? "Creating…" : "Create User"}
+                </button>
+              </form>
+            </div>
+
+            {/* User list */}
+            <div className="panel">
+              <p className="panel-title">All Users ({allUsers.length})</p>
+              {allUsers.length === 0 ? (
+                <div className="empty">No users found.</div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Full Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allUsers.map(u => (
+                      <tr key={u.id}>
+                        <td className="hint">{u.id}</td>
+                        <td style={{ fontWeight: 600 }}>{u.full_name}</td>
+                        <td className="hint">{u.email}</td>
+                        <td>
+                          <span style={{
+                            display: "inline-block", padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600,
+                            background: u.role === "admin" ? "rgba(233,113,50,0.15)" : u.role === "primary_reviewer" ? "rgba(91,155,212,0.15)" : u.role === "final_reviewer" ? "rgba(58,163,127,0.15)" : "rgba(125,133,144,0.15)",
+                            color: u.role === "admin" ? "var(--red)" : u.role === "primary_reviewer" ? "var(--accent)" : u.role === "final_reviewer" ? "var(--success)" : "var(--muted)",
+                          }}>
+                            {u.role.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td>{statusBadge(u.is_active ? "ACTIVE" : "REJECTED")}</td>
+                        <td className="hint">{new Date(u.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))}
                   </tbody>
