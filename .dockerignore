@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+__pycache__
+.pytest_cache
+frontend/node_modules
+frontend/dist
+desktop/node_modules
+desktop/dist
+niit_design_automation.db
+test_niit_design_automation.db
+*.pyc
+*.pyo
+*.pyd

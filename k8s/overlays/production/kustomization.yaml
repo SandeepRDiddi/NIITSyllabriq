@@ -1,0 +1,11 @@
+resources:
+  - ../../base/namespace.yaml
+  - ../../base/configmap.yaml
+  - ../../base/backend-deployment.yaml
+  - ../../base/backend-service.yaml
+  - ../../base/frontend-deployment.yaml
+  - ../../base/frontend-service.yaml
+  - ../../base/worker-deployment.yaml
+  - ../../base/ingress.yaml
+  - ../../base/hpa-api.yaml
+  - ../../base/hpa-workers.yaml

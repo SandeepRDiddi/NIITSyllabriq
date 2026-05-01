@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: niitsyllabriq-workers
+  namespace: niitsyllabriq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: niitsyllabriq-workers
+  template:
+    metadata:
+      labels:
+        app: niitsyllabriq-workers
+    spec:
+      containers:
+        - name: workers
+          image: __BACKEND_IMAGE__
+          imagePullPolicy: Always
+          command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8001"]
+          envFrom:
+            - configMapRef:
+                name: niitsyllabriq-config
+            - secretRef:
+                name: niitsyllabriq-secrets
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "384Mi"
+            limits:
+              cpu: "800m"
+              memory: "768Mi"
