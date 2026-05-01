@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: niitsyllabriq-config
+  namespace: niitsyllabriq
+data:
+  APP_NAME: "NIITSyllabriq"
+  ENVIRONMENT: "production"
+  PRIMARY_REVIEWERS: "primary.reviewer@niit.com"
+  FINAL_REVIEWERS: "final.reviewer1@niit.com,final.reviewer2@niit.com"
+  EXPORT_DIR: "app/storage/designs"
+  REQUIREMENT_DIR: "app/storage/requirements"
+  TEMPLATE_DIR: "app/templates/designs"
+  ALLOWED_ORIGINS: "__ALLOWED_ORIGINS__"
+  OLLAMA_BASE_URL: "__OLLAMA_BASE_URL__"
+  OLLAMA_GENERATION_MODEL: "__OLLAMA_GENERATION_MODEL__"
+  OLLAMA_EMBED_MODEL: "__OLLAMA_EMBED_MODEL__"

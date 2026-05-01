@@ -1,0 +1,98 @@
+name: Deploy to DigitalOcean
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "production"
+      ref:
+        description: "Git ref to deploy"
+        required: false
+        default: "main"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "latest"
+
+      - name: Authenticate Docker to DOCR
+        run: doctl registry login --expiry-seconds 1200
+
+      - name: Build frontend assets
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build backend image
+        run: |
+          docker build -t ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-api:${{ github.sha }} .
+
+      - name: Build frontend image
+        run: |
+          docker build -f frontend/Dockerfile -t ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-frontend:${{ github.sha }} .
+
+      - name: Push images
+        run: |
+          docker push ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-api:${{ github.sha }}
+          docker push ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-frontend:${{ github.sha }}
+
+      - name: Save Kubernetes kubeconfig
+        run: doctl kubernetes cluster kubeconfig save ${{ secrets.DOKS_CLUSTER_NAME }}
+
+      - name: Render Kubernetes manifests
+        env:
+          BACKEND_IMAGE: ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-api:${{ github.sha }}
+          FRONTEND_IMAGE: ${{ secrets.DOCR_REGISTRY }}/niitsyllabriq-frontend:${{ github.sha }}
+          APP_HOST: ${{ secrets.APP_HOST }}
+          API_HOST: ${{ secrets.API_HOST }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          SPACES_ACCESS_KEY: ${{ secrets.SPACES_ACCESS_KEY }}
+          SPACES_SECRET_KEY: ${{ secrets.SPACES_SECRET_KEY }}
+          SPACES_ENDPOINT: ${{ secrets.SPACES_ENDPOINT }}
+          SPACES_BUCKET_TRAINING: ${{ secrets.SPACES_BUCKET_TRAINING }}
+          SPACES_BUCKET_REQUIREMENTS: ${{ secrets.SPACES_BUCKET_REQUIREMENTS }}
+          SPACES_BUCKET_EXPORTS: ${{ secrets.SPACES_BUCKET_EXPORTS }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+          OLLAMA_GENERATION_MODEL: ${{ secrets.OLLAMA_GENERATION_MODEL }}
+          OLLAMA_EMBED_MODEL: ${{ secrets.OLLAMA_EMBED_MODEL }}
+        run: |
+          chmod +x scripts/render_k8s_manifests.sh
+          ./scripts/render_k8s_manifests.sh
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/rendered
+          kubectl rollout status deployment/niitsyllabriq-api -n niitsyllabriq --timeout=180s
+          kubectl rollout status deployment/niitsyllabriq-frontend -n niitsyllabriq --timeout=180s

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: niitsyllabriq-api
+  namespace: niitsyllabriq
+spec:
+  selector:
+    app: niitsyllabriq-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
