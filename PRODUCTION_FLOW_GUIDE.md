@@ -1,8 +1,8 @@
-# NIIT Design Automation Production Flow Guide
+# NIITSyllabriq Production Flow Guide
 
 ## Goal
 
-This guide shows the exact end-to-end flow you asked for:
+This guide shows the exact end-to-end flow NIITSyllabriq supports:
 
 1. Upload one existing PDF design document as the seed knowledge document.
 2. Upload a new customer requirement.
@@ -10,6 +10,8 @@ This guide shows the exact end-to-end flow you asked for:
 4. Send it through primary review and two final reviews.
 5. Export the final design.
 6. Track every step in the database for reporting.
+
+The supporting architecture is documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Production-Style Components
 
@@ -81,6 +83,12 @@ npm install
 npm start
 ```
 
+This gives you:
+
+- backend APIs on `http://localhost:8000`
+- frontend UI on `http://localhost:5173`
+- optional reviewer desktop shell through Electron
+
 ## Step 2: Login
 
 Use:
@@ -147,6 +155,7 @@ What happens:
 - similarity search runs against:
   - earlier requirements
   - uploaded training documents
+- the matching engine records whether the winning reference came from a prior requirement or a trained document
 - if the training PDF is most similar, its sections are selected for reuse
 - the NIIT template is filled
 - local Ollama enhances the draft if available
@@ -229,6 +238,8 @@ The system tracks all major actions in the database.
 - `reviewtask`
 - `workflowevent`
 - `user`
+
+These tables line up directly with the persistence model shown in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ### What `workflowevent` gives you
 
