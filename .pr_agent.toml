@@ -1,0 +1,52 @@
+# PR Agent Configuration for NIITSyllabriq
+
+[pr_reviewer]
+# Enable effort labels (small, medium, large)
+enable_review_labels_effort = true
+# Automatically approve PRs that meet quality threshold
+enable_auto_approval = false
+# Require comment for each suggestion
+require_comment = true
+# Publish review as comment
+publish_review_as_comment = true
+
+[github_app]
+# Commands to run on PR open/synchronize
+pr_commands = [
+    "/describe --pr_description.publish_description_as_comment=true",
+    "/review",
+    "/improve"
+]
+# Handle push events
+handle_push_trigger = false
+
+[review_agent]
+enabled = true
+publish_output = true
+
+[openai]
+# Use gpt-4-turbo by default for better quality
+model = "gpt-4-turbo"
+temperature = 0.2
+
+[config]
+# GitHub provider configuration
+git_provider = "github"
+# Log level: DEBUG, INFO, WARNING, ERROR
+log_level = "INFO"
+
+[pr_description]
+# Auto-generate PR description
+enable = true
+# Publish as comment
+publish_description_as_comment = true
+
+[pr_improve]
+# Enable code improvement suggestions
+enable = true
+# Maximum number of suggestions
+max_suggestions = 5
+
+[pr_reviewer.extra_instructions]
+# Add custom instructions for reviews
+general = "Review code for quality, security, and performance. Provide constructive feedback."
