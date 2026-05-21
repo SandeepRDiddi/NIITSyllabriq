@@ -1,5 +1,10 @@
 FROM node:20-alpine AS build
 
+# Receives the API base URL at build time from docker-compose.yml
+# Default: /api  (relative path — works on any domain via NGINX)
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci
