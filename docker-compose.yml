@@ -28,7 +28,7 @@ services:
   design-automation:
     build: .
     environment:
-      DATABASE_URL:              postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL:              postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB}
       # Ollama runs on the host machine, not inside Docker
       OLLAMA_BASE_URL:           http://host.docker.internal:11434
       OLLAMA_GENERATION_MODEL:   ${OLLAMA_GENERATION_MODEL}
@@ -37,6 +37,8 @@ services:
       FINAL_REVIEWERS:           ${FINAL_REVIEWERS}
       JWT_SECRET_KEY:            ${JWT_SECRET_KEY}
       ALLOWED_ORIGINS:           ${ALLOWED_ORIGINS}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./app/storage:/app/app/storage
     depends_on:
