@@ -106,9 +106,24 @@ type ReportSummary = {
   recent_events: WorkflowEvent[];
 };
 
+type LeadershipSummary = {
+  total_users: number;
+  active_users_count: number;
+  active_tool_users_count: number;
+  requirements_count: number;
+  designs_generated_count: number;
+  final_approved_count: number;
+  rejected_or_rework_count: number;
+  pending_review_count: number;
+  pdf_exports_count: number;
+  success_rate: number;
+  average_design_score: number;
+  recent_events: WorkflowEvent[];
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "reports" | "users";
+type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "leaderboard" | "reports" | "users";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -141,6 +156,7 @@ export default function App() {
   const [reviews, setReviews] = useState<ReviewTask[]>([]);
   const [trainingDocuments, setTrainingDocuments] = useState<TrainingDocument[]>([]);
   const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
+  const [leadershipSummary, setLeadershipSummary] = useState<LeadershipSummary | null>(null);
   const [loginForm, setLoginForm] = useState({ email: "admin@niit.com", password: "Admin@123" });
   // Requirements come in via email or call — no file upload needed
   const [reqForm, setReqForm] = useState({
@@ -222,6 +238,11 @@ export default function App() {
         ]);
         setReportSummary(summary);
         setAllUsers(users);
+      }
+      if (["admin", "svp", "executive"].includes(me.role)) {
+        setLeadershipSummary(await api<LeadershipSummary>("/reports/leadership"));
+      } else {
+        setLeadershipSummary(null);
       }
     } catch {
       setToken("");
@@ -473,6 +494,7 @@ export default function App() {
 
   const canEdit = user.role === "admin" || user.role === "designer";
   const canReview = ["admin", "primary_reviewer", "final_reviewer"].includes(user.role);
+  const canViewLeadership = ["admin", "svp", "executive"].includes(user.role);
   const pendingReviews = reviews.filter((r) => r.status === "PENDING").length;
 
   async function clearAllData() {
@@ -495,6 +517,7 @@ export default function App() {
     { id: "designs", label: "Designs" },
     ...(canEdit ? [{ id: "training" as Tab, label: "Training Library" }] : []),
     ...(canReview ? [{ id: "reviews" as Tab, label: "Reviews", badge: pendingReviews }] : []),
+    ...(canViewLeadership ? [{ id: "leaderboard" as Tab, label: "Leadership" }] : []),
     ...(user.role === "admin" ? [{ id: "users" as Tab, label: "👥 Users" }] : []),
     ...(user.role === "admin" ? [{ id: "reports" as Tab, label: "Reports" }] : []),
   ];
@@ -1177,7 +1200,27 @@ export default function App() {
               </div>
 
               <div className="panel" style={{ marginBottom: 0 }}>
-                <p className="panel-title">Design Preview</p>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <p className="panel-title" style={{ margin: 0 }}>Design Preview</p>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button className="btn-sm btn-outline" onClick={() => exportDesign(selectedDesign.id, "docx")}>
+                      Draft DOCX
+                    </button>
+                    <button
+                      className="btn-sm btn-success"
+                      onClick={() => exportDesign(selectedDesign.id, "pdf")}
+                      disabled={selectedDesign.status !== "FINAL_APPROVED"}
+                      title={selectedDesign.status === "FINAL_APPROVED" ? "Download approved PDF" : "Final PDF unlocks after both final approvals"}
+                    >
+                      Download Final PDF
+                    </button>
+                  </div>
+                </div>
+                {selectedDesign.status !== "FINAL_APPROVED" && (
+                  <div className="alert alert-info">
+                    Final PDF will be available after primary approval and both final reviewer approvals are complete.
+                  </div>
+                )}
                 <pre className="design-preview">{selectedDesign.final_content || selectedDesign.draft_content}</pre>
               </div>
             </div>
@@ -1283,6 +1326,8 @@ export default function App() {
                       <option value="designer">Designer — creates and submits designs</option>
                       <option value="primary_reviewer">Primary Reviewer — first approval gate</option>
                       <option value="final_reviewer">Final Reviewer — final sign-off</option>
+                      <option value="svp">SVP — leadership dashboard only</option>
+                      <option value="executive">Executive — leadership dashboard only</option>
                       <option value="admin">Admin — full access</option>
                     </select>
                   </div>
@@ -1337,6 +1382,87 @@ export default function App() {
                         </td>
                         <td>{statusBadge(u.is_active ? "ACTIVE" : "REJECTED")}</td>
                         <td className="hint">{new Date(u.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Leadership tab ───────────────────────── */}
+        {activeTab === "leaderboard" && canViewLeadership && leadershipSummary && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 22 }}>Leadership Dashboard</h2>
+              <p className="hint" style={{ marginTop: 6 }}>
+                SVP+ view of adoption, successful design generation, approval throughput, and final PDF usage.
+              </p>
+            </div>
+
+            <div className="grid-3" style={{ marginBottom: 24 }}>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.active_tool_users_count}</span>
+                <span className="metric-label">Active Tool Users</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.designs_generated_count}</span>
+                <span className="metric-label">Designs Generated</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.final_approved_count}</span>
+                <span className="metric-label">Successfully Approved</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{formatPercent(leadershipSummary.success_rate)}</span>
+                <span className="metric-label">Success Rate</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{formatPercent(leadershipSummary.average_design_score)}</span>
+                <span className="metric-label">Avg Design Score</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.pdf_exports_count}</span>
+                <span className="metric-label">Final PDFs Downloaded</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.requirements_count}</span>
+                <span className="metric-label">Requirements Received</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.pending_review_count}</span>
+                <span className="metric-label">Pending Reviews</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{leadershipSummary.rejected_or_rework_count}</span>
+                <span className="metric-label">Rejected / Rework</span>
+              </div>
+            </div>
+
+            <div className="panel">
+              <p className="panel-title">Recent Executive Activity</p>
+              {leadershipSummary.recent_events.length === 0 ? (
+                <div className="empty">No activity recorded yet.</div>
+              ) : (
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Event</th>
+                      <th>Entity</th>
+                      <th>Actor</th>
+                      <th>Status</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leadershipSummary.recent_events.map((event) => (
+                      <tr key={event.id}>
+                        <td style={{ fontWeight: 600 }}>{event.event_type.replace(/_/g, " ")}</td>
+                        <td className="hint">{event.entity_type} #{event.entity_id}</td>
+                        <td className="hint">{event.actor_email}</td>
+                        <td>{statusBadge(event.status)}</td>
+                        <td className="hint">{new Date(event.created_at).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

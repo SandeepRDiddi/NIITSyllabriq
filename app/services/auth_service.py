@@ -44,6 +44,7 @@ class AuthService:
             ("primary.reviewer@niit.com", "Primary Reviewer", "primary_reviewer", "Reviewer@123"),
             ("final.reviewer1@niit.com", "Final Reviewer One", "final_reviewer", "Reviewer@123"),
             ("final.reviewer2@niit.com", "Final Reviewer Two", "final_reviewer", "Reviewer@123"),
+            ("svp@niit.com", "SVP Leader", "svp", "Svp@123"),
         ]
         for email, full_name, role, password in seed_users:
             user = session.exec(select(User).where(User.email == email)).first()

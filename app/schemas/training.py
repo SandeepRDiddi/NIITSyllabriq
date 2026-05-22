@@ -38,3 +38,18 @@ class ReportingSummaryRead(BaseModel):
     final_approved_count: int
     average_design_score: float
     recent_events: List[WorkflowEventRead]
+
+
+class LeadershipSummaryRead(BaseModel):
+    total_users: int
+    active_users_count: int
+    active_tool_users_count: int
+    requirements_count: int
+    designs_generated_count: int
+    final_approved_count: int
+    rejected_or_rework_count: int
+    pending_review_count: int
+    pdf_exports_count: int
+    success_rate: float
+    average_design_score: float
+    recent_events: List[WorkflowEventRead]

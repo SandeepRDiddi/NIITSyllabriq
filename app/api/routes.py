@@ -20,7 +20,7 @@ from app.schemas.common import HealthResponse, MessageResponse
 from app.schemas.design import DesignRead, DesignSummaryRead, GenerateDesignRequest, ReferenceRead, ScoreCardRead
 from app.schemas.requirement import RequirementCreateResponse, RequirementRead, RequirementTextCreate
 from app.schemas.review import ReviewSubmitRequest, ReviewTaskRead
-from app.schemas.training import ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
+from app.schemas.training import LeadershipSummaryRead, ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
 from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service, get_current_user, require_roles
 from app.services.design_service import DesignService
@@ -550,8 +550,8 @@ def reset_all_data(
     from app.models.design import DesignDocument, RetrievedReference, ScoreCard
     from app.models.requirement import Requirement
     from app.models.review import ReviewTask
-    from app.models.training import WorkflowEvent, TrainingDocument
-    for model in [WorkflowEvent, ReviewTask, ScoreCard, RetrievedReference, DesignDocument, Requirement, TrainingDocument]:
+    from app.models.training import TrainingChunk, TrainingDocument, WorkflowEvent
+    for model in [WorkflowEvent, ReviewTask, ScoreCard, RetrievedReference, DesignDocument, Requirement, TrainingChunk, TrainingDocument]:
         for row in session.exec(select(model)).all():
             session.delete(row)
     session.commit()
@@ -565,6 +565,15 @@ def reporting_summary(
 ) -> ReportingSummaryRead:
     summary = reporting_service.summary(session)
     return ReportingSummaryRead(**summary)
+
+
+@router.get("/reports/leadership", response_model=LeadershipSummaryRead)
+def leadership_summary(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles(["admin", "svp", "executive"])),
+) -> LeadershipSummaryRead:
+    summary = reporting_service.leadership_summary(session)
+    return LeadershipSummaryRead(**summary)
 
 
 @router.get("/reports/events", response_model=List[WorkflowEventRead])
