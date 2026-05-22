@@ -3,13 +3,17 @@ import os
 from pathlib import Path
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_niit_design_automation.db"
+os.environ["LLM_PROVIDER"] = "ollama"
+os.environ["GROQ_API_KEY"] = ""
 os.environ["PRIMARY_REVIEWERS"] = "primary.reviewer@niit.com"
 os.environ["FINAL_REVIEWERS"] = "final.reviewer1@niit.com,final.reviewer2@niit.com"
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
-from app.db.session import init_db
+from app.db.session import engine, init_db
 from app.main import app
+from app.models.training import TrainingChunk
 
 
 db_path = Path("test_niit_design_automation.db")
@@ -31,6 +35,9 @@ def test_healthcheck():
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
+    assert payload["llm_provider"] == "ollama"
+    assert payload["generation_model"] == "qwen2.5:7b-instruct"
+    assert payload["embedding_model"] == "nomic-embed-text"
     assert "ollama_reachable" in payload
 
 
@@ -88,6 +95,9 @@ def test_requirement_to_final_approval_flow():
         },
     )
     assert upload.status_code == 200
+    with Session(engine) as session:
+        chunks = session.exec(select(TrainingChunk)).all()
+        assert len(chunks) >= 1
     requirement_id = upload.json()["id"]
 
     generated = client.post(
@@ -100,6 +110,13 @@ def test_requirement_to_final_approval_flow():
     assert design_payload["status"] == "UNDER_PRIMARY_REVIEW"
     assert design_payload["scorecard"]["overall_score"] >= 0
     assert any(ref["source_type"] in {"training_document", "requirement"} for ref in design_payload["references"])
+
+    early_pdf_export = client.get(
+        f"/designs/{design_payload['id']}/export",
+        params={"version": "final", "file_format": "pdf"},
+        headers=admin_headers,
+    )
+    assert early_pdf_export.status_code == 409
 
     reviews = client.get("/reviews", headers=primary_headers)
     assert reviews.status_code == 200

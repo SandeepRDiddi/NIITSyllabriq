@@ -351,6 +351,67 @@ button.btn-accent:hover  { background: #4a8bc4; }
 
 .empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 14px; }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 70px rgba(0,0,0,0.55);
+  max-height: 90vh;
+  overflow: auto;
+}
+.design-detail {
+  width: min(1100px, 96vw);
+  padding: 24px;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.score-grid {
+  display: grid;
+  gap: 10px;
+}
+.score-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 2fr) 54px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.score-row strong {
+  text-align: right;
+}
+.compact-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 13px;
+}
+.design-preview {
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--text);
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 /* ── Divider ─────────────────────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 

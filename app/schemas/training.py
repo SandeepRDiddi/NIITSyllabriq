@@ -13,6 +13,7 @@ class TrainingDocumentRead(BaseModel):
     uploaded_by: str
     status: str
     summary: str
+    chunk_count: int = 0
     created_at: datetime
     normalized_document: Dict[str, Any]
 

@@ -11,7 +11,7 @@ class GroqClient:
     Groq runs llama-3.3-70b at ~500 tokens/sec — a 10-module design
     completes in under 30 seconds vs 3-5 minutes on a local CPU.
 
-    Set GROQ_API_KEY in your .env file to activate.
+    Set LLM_PROVIDER=groq and GROQ_API_KEY in your .env file to activate.
     """
 
     BASE_URL = "https://api.groq.com/openai/v1/chat/completions"

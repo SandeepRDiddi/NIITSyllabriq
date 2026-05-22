@@ -13,7 +13,7 @@ def init_db() -> None:
     from app.models.design import DesignDocument, RetrievedReference, ScoreCard
     from app.models.requirement import Requirement
     from app.models.review import ReviewTask
-    from app.models.training import TrainingDocument, WorkflowEvent
+    from app.models.training import TrainingChunk, TrainingDocument, WorkflowEvent
     from app.models.user import User
     from app.services.auth_service import auth_service
 

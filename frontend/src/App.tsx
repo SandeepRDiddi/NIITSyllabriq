@@ -29,6 +29,40 @@ type DesignSummary = {
   created_at: string;
 };
 
+type DesignReference = {
+  source_requirement_id: number;
+  source_design_id?: number | null;
+  source_training_document_id?: number | null;
+  source_type: string;
+  source_title: string;
+  similarity_score: number;
+  reused_sections: string[];
+};
+
+type DesignScorecard = {
+  requirement_coverage_score: number;
+  template_completeness_score: number;
+  technical_consistency_score: number;
+  reuse_relevance_score: number;
+  risk_quality_score: number;
+  review_readiness_score: number;
+  llm_evaluation_score: number;
+  overall_score: number;
+  missing_requirements: string[];
+  contradictions: string[];
+  notes: string;
+};
+
+type DesignDetail = DesignSummary & {
+  reused_content: boolean;
+  draft_content: string;
+  final_content?: string | null;
+  traceability_map: Record<string, unknown>;
+  references: DesignReference[];
+  scorecard?: DesignScorecard | null;
+  updated_at: string;
+};
+
 type ReviewTask = {
   id: number;
   design_document_id: number;
@@ -46,6 +80,7 @@ type TrainingDocument = {
   uploaded_by: string;
   status: string;
   summary: string;
+  chunk_count: number;
   created_at: string;
 };
 
@@ -90,6 +125,14 @@ function statusBadge(status: string) {
   return <span className={map[status] || "badge badge-default"}>{status.replace(/_/g, " ")}</span>;
 }
 
+function scoreBarClass(score: number) {
+  return score >= 0.78 ? "" : score >= 0.5 ? " mid" : " low";
+}
+
+function formatPercent(score: number) {
+  return `${Math.round(score * 100)}%`;
+}
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [user, setUser] = useState<User | null>(null);
@@ -106,8 +149,10 @@ export default function App() {
     totalDurationHours: "",
     source: "email",
     rawText: "",
+    file: null as File | null,
   });
   const [trainingForm, setTrainingForm] = useState({ title: "", file: null as File | null });
+  const [selectedDesign, setSelectedDesign] = useState<DesignDetail | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [clearing, setClearing] = useState(false);
@@ -203,29 +248,43 @@ export default function App() {
   // Save the requirement from typed/pasted text (email, call notes, etc.)
   async function handleSaveRequirement(e: FormEvent, andGenerate = false) {
     e.preventDefault();
-    if (!reqForm.customerName.trim() || !reqForm.title.trim() || !reqForm.rawText.trim()) {
-      notify("Please fill in Customer Name, Program Title and the requirement text.", "error");
+    if (!reqForm.customerName.trim() || !reqForm.title.trim()) {
+      notify("Please fill in Customer Name and Program Title.", "error");
+      return;
+    }
+    if (!reqForm.rawText.trim() && !reqForm.file) {
+      notify("Paste requirement text or upload a requirement file.", "error");
       return;
     }
     setLoading(true);
     try {
-      const body: Record<string, unknown> = {
-        customer_name: reqForm.customerName.trim(),
-        title: reqForm.title.trim(),
-        raw_text: reqForm.rawText.trim(),
-        source: reqForm.source,
-      };
-      if (reqForm.totalDurationHours) {
-        body.total_duration_hours = parseInt(reqForm.totalDurationHours, 10);
+      let created: { id: number };
+      if (reqForm.file) {
+        const fd = new FormData();
+        fd.append("file", reqForm.file);
+        created = await api<{ id: number }>(
+          `/requirements/upload?customer_name=${encodeURIComponent(reqForm.customerName.trim())}&title=${encodeURIComponent(reqForm.title.trim())}`,
+          { method: "POST", body: fd },
+        );
+      } else {
+        const body: Record<string, unknown> = {
+          customer_name: reqForm.customerName.trim(),
+          title: reqForm.title.trim(),
+          raw_text: reqForm.rawText.trim(),
+          source: reqForm.source,
+        };
+        if (reqForm.totalDurationHours) {
+          body.total_duration_hours = parseInt(reqForm.totalDurationHours, 10);
+        }
+        created = await api<{ id: number }>("/requirements/text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
       }
-      const created = await api<{ id: number }>("/requirements/text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
       notify("Requirement saved successfully.");
       const savedTitle = reqForm.title.trim();
-      setReqForm({ customerName: "", title: "", totalDurationHours: "", source: "email", rawText: "" });
+      setReqForm({ customerName: "", title: "", totalDurationHours: "", source: "email", rawText: "", file: null });
       await refreshDashboard();
       if (andGenerate) {
         // Open reviewer picker for the just-created requirement
@@ -340,9 +399,14 @@ export default function App() {
 
   async function exportDesign(designId: number, fileFormat: "md" | "docx" | "pdf") {
     try {
-      const res = await fetch(`${API_BASE}/designs/${designId}/export?version=final&file_format=${fileFormat}`, {
+      const version = fileFormat === "pdf" ? "final" : "draft";
+      const res = await fetch(`${API_BASE}/designs/${designId}/export?version=${version}&file_format=${fileFormat}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -352,6 +416,18 @@ export default function App() {
       URL.revokeObjectURL(url);
     } catch (err) {
       notify(`Export failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }
+
+  async function viewDesign(designId: number) {
+    setLoading(true);
+    try {
+      const detail = await api<DesignDetail>(`/designs/${designId}`);
+      setSelectedDesign(detail);
+    } catch (err) {
+      notify(`Could not load design: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -463,13 +539,9 @@ export default function App() {
 
       {/* ── Reviewer Picker Modal ───────────────────────────────────────── */}
       {reviewerPick.reqId !== null && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 1000,
-          background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{
-            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-            padding: 28, minWidth: 440, maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{
+            padding: 28, minWidth: 440, maxWidth: 520,
           }}>
             <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16, color: "var(--text)" }}>
               Select Primary Reviewer
@@ -477,7 +549,6 @@ export default function App() {
             <p style={{ margin: "0 0 20px", color: "var(--muted)", fontSize: 13 }}>
               for: <strong style={{ color: "var(--text)" }}>{reviewerPick.reqTitle}</strong>
             </p>
-
             {allUsers.filter(u => ["primary_reviewer", "admin"].includes(u.role)).length === 0 ? (
               <div className="alert alert-info" style={{ marginBottom: 16 }}>
                 No primary_reviewer users found. <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setReviewerPick({ reqId: null, reqTitle: "", selectedReviewers: [], andGenerate: false }); setActiveTab("users"); }}>Create one →</span>
@@ -729,8 +800,7 @@ export default function App() {
               <div className="panel" style={{ marginBottom: 24 }}>
                 <p className="panel-title">New Program Requirement</p>
                 <p className="hint" style={{ marginBottom: 16 }}>
-                  Paste the requirement from an email, type notes from a discovery call, or enter anything the customer communicated.
-                  No file needed — just type or paste the text below.
+                  Paste requirement notes or upload a PDF/DOCX/TXT requirement. The system normalizes it before design generation.
                 </p>
                 <form onSubmit={(e) => handleSaveRequirement(e, false)}>
                   {/* Row 1: Customer + Title */}
@@ -784,15 +854,27 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div className="field" style={{ marginBottom: 16 }}>
+                    <label>Requirement File</label>
+                    <input
+                      type="file"
+                      accept=".txt,.md,.pdf,.docx"
+                      onChange={(e) => setReqForm({ ...reqForm, file: e.target.files?.[0] || null })}
+                    />
+                    <p className="hint" style={{ marginTop: 4 }}>
+                      Optional. If a file is uploaded, it will be used instead of the pasted text.
+                    </p>
+                  </div>
+
                   {/* Requirement text area */}
                   <div className="field" style={{ marginBottom: 16 }}>
-                    <label>Requirement Details <span style={{ color: "var(--red)" }}>*</span></label>
+                    <label>Requirement Details {!reqForm.file && <span style={{ color: "var(--red)" }}>*</span>}</label>
                     <textarea
                       value={reqForm.rawText}
                       onChange={(e) => setReqForm({ ...reqForm, rawText: e.target.value })}
                       rows={10}
                       placeholder={`Paste the email or type the requirement here.\n\nExample:\n"We need a 40-hour program on React and Node.js for a batch of 25 experienced Java developers at Infosys. The program should cover frontend fundamentals, hooks, REST API integration, and deployment to AWS. Pre-requisites are basic JavaScript and Git knowledge."`}
-                      required
+                      required={!reqForm.file}
                       style={{ width: "100%", resize: "vertical", fontFamily: "inherit", fontSize: 14, padding: 10, borderRadius: 6, border: "1px solid var(--border)", lineHeight: 1.6 }}
                     />
                     <p className="hint" style={{ marginTop: 4 }}>
@@ -889,7 +971,8 @@ export default function App() {
                 <tbody>
                   {designs.map((d) => {
                     const score = d.similarity_score;
-                    const barClass = score >= 0.78 ? "" : score >= 0.5 ? " mid" : " low";
+                    const finalApproved = d.status === "FINAL_APPROVED";
+                    const needsRework = ["PRIMARY_REJECTED", "FINAL_REWORK_REQUIRED"].includes(d.status);
                     return (
                       <tr key={d.id}>
                         <td className="hint">{d.id}</td>
@@ -898,17 +981,25 @@ export default function App() {
                         <td>
                           <div className="row" style={{ gap: 8, alignItems: "center" }}>
                             <div className="score-bar-wrap" style={{ width: 80 }}>
-                              <div className={`score-bar${barClass}`} style={{ width: `${Math.min(score * 100, 100)}%` }} />
+                              <div className={`score-bar${scoreBarClass(score)}`} style={{ width: `${Math.min(score * 100, 100)}%` }} />
                             </div>
-                            <span className="hint">{(score * 100).toFixed(0)}%</span>
+                            <span className="hint">{formatPercent(score)}</span>
                           </div>
                         </td>
                         <td className="hint">{d.created_by}</td>
                         <td>
                           <div className="row" style={{ gap: 6 }}>
-                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "md")}>MD</button>
-                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "docx")}>DOCX</button>
-                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "pdf")}>PDF</button>
+                            <button className="btn-sm btn-secondary" onClick={() => viewDesign(d.id)}>View</button>
+                            {needsRework && canEdit && (
+                              <button className="btn-sm btn-accent" onClick={() => openReviewerPicker(d.requirement_id, d.title)} disabled={loading}>
+                                Regenerate
+                              </button>
+                            )}
+                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "md")}>Draft MD</button>
+                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "docx")}>Draft DOCX</button>
+                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "pdf")} disabled={!finalApproved} title={finalApproved ? "Download approved PDF" : "PDF is available after final approval"}>
+                              Final PDF
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -961,6 +1052,7 @@ export default function App() {
                       <th>Title</th>
                       <th>File</th>
                       <th>Status</th>
+                      <th>Chunks</th>
                       <th>Summary</th>
                       <th>Uploaded by</th>
                     </tr>
@@ -972,6 +1064,7 @@ export default function App() {
                         <td style={{ fontWeight: 600 }}>{t.title}</td>
                         <td className="hint">{t.source_filename}</td>
                         <td>{statusBadge(t.status || "ACTIVE")}</td>
+                        <td>{t.chunk_count || 0}</td>
                         <td className="hint" style={{ maxWidth: 300 }}>{t.summary?.slice(0, 120)}{t.summary?.length > 120 ? "…" : ""}</td>
                         <td className="hint">{t.uploaded_by}</td>
                       </tr>
@@ -979,6 +1072,114 @@ export default function App() {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {selectedDesign && (
+          <div className="modal-backdrop" onClick={() => setSelectedDesign(null)}>
+            <div className="modal-card design-detail" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <p className="panel-title" style={{ marginBottom: 8 }}>{selectedDesign.title}</p>
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                    {statusBadge(selectedDesign.status)}
+                    <span className="hint">Design #{selectedDesign.id}</span>
+                    <span className="hint">Updated {new Date(selectedDesign.updated_at).toLocaleString()}</span>
+                  </div>
+                </div>
+                <button className="btn-secondary btn-sm" onClick={() => setSelectedDesign(null)}>Close</button>
+              </div>
+
+              <div className="grid-3" style={{ marginBottom: 20 }}>
+                <div className="metric metric-accent">
+                  <span className="metric-value">{selectedDesign.scorecard ? formatPercent(selectedDesign.scorecard.overall_score) : "N/A"}</span>
+                  <span className="metric-label">Design Accuracy</span>
+                </div>
+                <div className="metric metric-accent">
+                  <span className="metric-value">{formatPercent(selectedDesign.similarity_score)}</span>
+                  <span className="metric-label">Reuse Similarity</span>
+                </div>
+                <div className="metric metric-accent">
+                  <span className="metric-value">{selectedDesign.references.length}</span>
+                  <span className="metric-label">References Used</span>
+                </div>
+              </div>
+
+              {selectedDesign.scorecard && (
+                <div className="panel" style={{ marginBottom: 16 }}>
+                  <p className="panel-title">Quality Scorecard</p>
+                  <div className="score-grid">
+                    {[
+                      ["Requirement Coverage", selectedDesign.scorecard.requirement_coverage_score],
+                      ["Template Completeness", selectedDesign.scorecard.template_completeness_score],
+                      ["Technical Consistency", selectedDesign.scorecard.technical_consistency_score],
+                      ["Reuse Relevance", selectedDesign.scorecard.reuse_relevance_score],
+                      ["Risk Quality", selectedDesign.scorecard.risk_quality_score],
+                      ["Review Readiness", selectedDesign.scorecard.review_readiness_score],
+                      ["LLM Evaluation", selectedDesign.scorecard.llm_evaluation_score],
+                    ].map(([label, value]) => (
+                      <div key={label as string} className="score-row">
+                        <span>{label}</span>
+                        <div className="score-bar-wrap">
+                          <div className={`score-bar${scoreBarClass(value as number)}`} style={{ width: `${Math.min((value as number) * 100, 100)}%` }} />
+                        </div>
+                        <strong>{formatPercent(value as number)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedDesign.scorecard.notes && <p className="hint" style={{ marginTop: 14 }}>{selectedDesign.scorecard.notes}</p>}
+                  {(selectedDesign.scorecard.missing_requirements.length > 0 || selectedDesign.scorecard.contradictions.length > 0) && (
+                    <div className="grid" style={{ marginTop: 16 }}>
+                      <div>
+                        <p className="label">Missing Requirements</p>
+                        <ul className="compact-list">
+                          {selectedDesign.scorecard.missing_requirements.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="label">Contradictions</p>
+                        <ul className="compact-list">
+                          {selectedDesign.scorecard.contradictions.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="panel" style={{ marginBottom: 16 }}>
+                <p className="panel-title">Retrieved References</p>
+                {selectedDesign.references.length === 0 ? (
+                  <div className="empty" style={{ padding: "18px 0" }}>No reusable references were found.</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Source</th>
+                        <th>Title</th>
+                        <th>Match</th>
+                        <th>Sections</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDesign.references.map((ref, idx) => (
+                        <tr key={`${ref.source_type}-${ref.source_title}-${idx}`}>
+                          <td>{ref.source_type.replace(/_/g, " ")}</td>
+                          <td>{ref.source_title}</td>
+                          <td>{formatPercent(ref.similarity_score)}</td>
+                          <td className="hint">{ref.reused_sections.join(", ") || "General context"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="panel" style={{ marginBottom: 0 }}>
+                <p className="panel-title">Design Preview</p>
+                <pre className="design-preview">{selectedDesign.final_content || selectedDesign.draft_content}</pre>
+              </div>
             </div>
           </div>
         )}

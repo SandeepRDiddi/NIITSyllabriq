@@ -150,6 +150,16 @@ tests/              API and workflow tests
 
 ## Quick Start
 
+### Docker Compose with Local LLM
+
+```bash
+docker compose up --build
+docker compose exec ollama ollama pull qwen2.5:7b-instruct
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Then open the frontend at [http://localhost:5173](http://localhost:5173). See [LOCAL_LLM_DEPLOYMENT.md](./LOCAL_LLM_DEPLOYMENT.md) for model choices and production settings.
+
 ### 1. Clone the repository
 
 ```bash
@@ -223,6 +233,7 @@ The shortest useful demo is:
 - [EXECUTIVE_SUMMARY.md](./EXECUTIVE_SUMMARY.md): one-page business and technical summary
 - [PRODUCTION_FLOW_GUIDE.md](./PRODUCTION_FLOW_GUIDE.md): operator walkthrough for the full lifecycle
 - [SETUP_GUIDE.md](./SETUP_GUIDE.md): environment and local setup details
+- [LOCAL_LLM_DEPLOYMENT.md](./LOCAL_LLM_DEPLOYMENT.md): Ollama deployment, production env, and model recommendations
 - [design-automation-architecture.md](./design-automation-architecture.md): earlier solution architecture notes
 
 ## API Highlights
@@ -290,7 +301,7 @@ Typical stack:
 - Postgres
 - shared file storage
 - React frontend
-- Ollama on internal GPU workstation
+- Ollama on an internal GPU workstation or private inference host
 
 ### Hybrid
 

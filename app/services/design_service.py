@@ -83,14 +83,22 @@ Study this example carefully — your output must match this level of detail:
 
 class DesignService:
     def __init__(self) -> None:
-        # Use Groq if an API key is configured, otherwise fall back to local Ollama.
-        # To switch: set GROQ_API_KEY in your .env file.
-        groq = GroqClient()
-        self.llm = groq if groq.is_reachable() else OllamaClient()
+        self.llm = self._build_llm_client()
         self.similarity_service = SimilarityService()
         self.scoring_service = ScoringService()
         self.storage_service = StorageService()
         self.template_path = Path(settings.template_dir) / "niit_template.md"
+
+    def _build_llm_client(self) -> OllamaClient | GroqClient:
+        provider = settings.llm_provider.strip().lower()
+        if provider == "ollama":
+            return OllamaClient()
+        if provider == "groq":
+            groq = GroqClient()
+            if not groq.is_reachable():
+                raise ValueError("LLM_PROVIDER=groq requires GROQ_API_KEY to be set")
+            return groq
+        raise ValueError("LLM_PROVIDER must be either 'ollama' or 'groq'")
 
     # ------------------------------------------------------------------
     # Public API

@@ -13,7 +13,7 @@ from app.db.session import get_session
 from app.models.design import DesignDocument, RetrievedReference, ScoreCard
 from app.models.requirement import Requirement
 from app.models.review import ReviewTask
-from app.models.training import TrainingDocument, WorkflowEvent
+from app.models.training import TrainingChunk, TrainingDocument, WorkflowEvent
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse, UserCreate, UserRead
 from app.schemas.common import HealthResponse, MessageResponse
@@ -48,6 +48,13 @@ def healthcheck() -> HealthResponse:
     return HealthResponse(
         status="ok",
         environment=settings.environment,
+        llm_provider=settings.llm_provider,
+        generation_model=(
+            settings.groq_model
+            if settings.llm_provider == "groq"
+            else settings.ollama_generation_model
+        ),
+        embedding_model=settings.ollama_embed_model,
         ollama_reachable=ollama_client.is_reachable(),
     )
 
@@ -296,6 +303,11 @@ async def upload_training_document(
         uploaded_by=training_document.uploaded_by,
         status=training_document.status,
         summary=training_document.summary,
+        chunk_count=len(
+            session.exec(
+                select(TrainingChunk).where(TrainingChunk.training_document_id == training_document.id)
+            ).all()
+        ),
         created_at=training_document.created_at,
         normalized_document=json.loads(training_document.normalized_json),
     )
@@ -307,6 +319,10 @@ def list_training_documents(
     _: User = Depends(require_roles(["admin", "designer", "primary_reviewer", "final_reviewer"])),
 ) -> List[TrainingDocumentRead]:
     documents = training_service.list_training_documents(session)
+    chunks = session.exec(select(TrainingChunk)).all()
+    chunk_counts: dict[int, int] = {}
+    for chunk in chunks:
+        chunk_counts[chunk.training_document_id] = chunk_counts.get(chunk.training_document_id, 0) + 1
     return [
         TrainingDocumentRead(
             id=item.id or 0,
@@ -315,6 +331,7 @@ def list_training_documents(
             uploaded_by=item.uploaded_by,
             status=item.status,
             summary=item.summary,
+            chunk_count=chunk_counts.get(item.id or 0, 0),
             created_at=item.created_at,
             normalized_document=json.loads(item.normalized_json),
         )
@@ -440,6 +457,14 @@ def export_design(
     design = session.get(DesignDocument, design_id)
     if not design:
         raise HTTPException(status_code=404, detail="Design not found")
+    if version not in {"draft", "final"}:
+        raise HTTPException(status_code=400, detail="version must be 'draft' or 'final'")
+    if file_format not in {"md", "docx", "pdf"}:
+        raise HTTPException(status_code=400, detail="file_format must be one of: md, docx, pdf")
+    if version == "final" and design.status != "FINAL_APPROVED":
+        raise HTTPException(status_code=409, detail="Final exports are available only after final approval")
+    if file_format == "pdf" and design.status != "FINAL_APPROVED":
+        raise HTTPException(status_code=409, detail="PDF export is available only after final approval")
     content = design.final_content if version == "final" and design.final_content else design.draft_content
     path = design.final_path if version == "final" else design.draft_path
     stem = storage_service.design_stem(design.title, f"{version}-{file_format}")

@@ -12,6 +12,7 @@ class OllamaClient:
         self.base_url = settings.ollama_base_url.rstrip("/")
         self.generation_model = settings.ollama_generation_model
         self.embedding_model = settings.ollama_embed_model
+        self.embedding_timeout = settings.ollama_embed_timeout_seconds
 
     def is_reachable(self) -> bool:
         try:
@@ -57,7 +58,7 @@ class OllamaClient:
             "input": text,
         }
         try:
-            response = httpx.post(f"{self.base_url}/api/embed", json=payload, timeout=30.0)
+            response = httpx.post(f"{self.base_url}/api/embed", json=payload, timeout=self.embedding_timeout)
             response.raise_for_status()
             data = response.json()
             embeddings = data.get("embeddings") or []

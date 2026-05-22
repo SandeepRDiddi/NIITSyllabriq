@@ -14,11 +14,17 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "sqlite:///./niit_design_automation.db"
     postgres_url: str = "postgresql+psycopg://niit:niit@localhost:5432/niit_design_automation"
+    llm_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_generation_model: str = "qwen2.5:7b-instruct"
     ollama_embed_model: str = "nomic-embed-text"
-    groq_api_key: str = ""                                    # Set this to use Groq instead of Ollama
-    groq_model: str = "llama-3.3-70b-versatile"              # Best Groq model for structured output
+    ollama_embed_timeout_seconds: float = 10.0
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    training_use_llm_normalization: bool = False
+    training_embed_on_upload: bool = False
+    training_chunk_max_chars: int = 1800
+    training_max_chunks_per_document: int = 40
     similarity_threshold: float = 0.78
     primary_reviewers: str = Field(default="primary.reviewer@niit.com")
     final_reviewers: str = Field(default="final.reviewer1@niit.com,final.reviewer2@niit.com")

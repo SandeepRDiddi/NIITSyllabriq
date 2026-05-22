@@ -5,9 +5,11 @@ import re
 
 from sqlmodel import Session, select
 
-from app.models.training import TrainingDocument
+from app.core.config import settings
+from app.models.training import TrainingChunk, TrainingDocument
 from app.services.document_parser import DocumentParser
 from app.services.ollama_client import OllamaClient
+from app.services.text_utils import normalize_whitespace, split_sentences
 
 
 class TrainingService:
@@ -40,6 +42,7 @@ class TrainingService:
         session.add(training_document)
         session.commit()
         session.refresh(training_document)
+        self._index_training_chunks(session, training_document)
         return training_document
 
     def list_training_documents(self, session: Session) -> list[TrainingDocument]:
@@ -47,7 +50,7 @@ class TrainingService:
 
     def _normalize(self, raw_text: str) -> dict:
         """Use LLM when available, fall back to heuristic parser."""
-        if self.ollama.is_reachable():
+        if settings.training_use_llm_normalization and self.ollama.is_reachable():
             result = self._normalize_with_llm(raw_text)
             if result:
                 return result
@@ -98,3 +101,44 @@ class TrainingService:
         patterns = normalized.get("key_design_patterns", [])
         extras = f" Key patterns: {', '.join(str(p) for p in patterns[:3])}." if patterns else ""
         return (goal + extras)[:500]
+
+    def _index_training_chunks(self, session: Session, training_document: TrainingDocument) -> None:
+        if not training_document.id:
+            return
+        chunks = self._chunk_text(
+            training_document.raw_text,
+            max_chars=settings.training_chunk_max_chars,
+        )[: settings.training_max_chunks_per_document]
+        for index, chunk in enumerate(chunks):
+            embedding = self.ollama.embed(chunk) if settings.training_embed_on_upload else None
+            session.add(
+                TrainingChunk(
+                    training_document_id=training_document.id,
+                    chunk_index=index,
+                    content=chunk,
+                    embedding_json=json.dumps(embedding) if embedding else None,
+                )
+            )
+        session.commit()
+
+    def _chunk_text(self, raw_text: str, max_chars: int = 1800, overlap_sentences: int = 2) -> list[str]:
+        sentences = split_sentences(raw_text)
+        if not sentences:
+            normalized = normalize_whitespace(raw_text)
+            return [normalized] if normalized else []
+
+        chunks: list[str] = []
+        current: list[str] = []
+        current_len = 0
+        for sentence in sentences:
+            sentence_len = len(sentence) + 1
+            if current and current_len + sentence_len > max_chars:
+                chunks.append(" ".join(current))
+                current = current[-overlap_sentences:] if overlap_sentences else []
+                current_len = sum(len(item) + 1 for item in current)
+            current.append(sentence)
+            current_len += sentence_len
+
+        if current:
+            chunks.append(" ".join(current))
+        return chunks
