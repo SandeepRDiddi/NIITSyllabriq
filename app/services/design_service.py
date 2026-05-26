@@ -427,40 +427,49 @@ class DesignService:
         or when the LLM output is unparseable.
         All keys must match the Jinja2 template variables exactly.
         """
-        # Extract fields from normalized requirement (IT-requirement schema)
         business_goal = str(normalized_requirement.get("business_goal", ""))
         functional = [str(item) for item in normalized_requirement.get("functional_requirements", [])]
         scope_items = [str(item) for item in normalized_requirement.get("scope", [])]
         constraints = [str(item) for item in normalized_requirement.get("constraints", [])]
         source_summary = normalized_requirement.get("source_summary", [])
 
-        # Derive program name — strip common suffixes / clean up title
         program_name = title.replace(" - Solution Design", "").replace(" Design", "").strip()
 
-        # Try to extract total hours from the requirement text
         total_duration_hours = self._extract_duration(
             business_goal + " ".join(str(s) for s in source_summary)
         )
 
-        # Program introduction: 2 paragraphs built from the business goal
-        intro_p1 = (
-            f"This program — {program_name} — is designed to equip participants with the practical skills "
-            f"and theoretical knowledge required to address the following learning objective: {business_goal or '[TBD]'}. "
-            "The curriculum is structured to deliver progressive skill development across all covered topics."
-        )
+        # Fix 1: Extract the actual program description from after "Program Overview:"
+        # so the intro doesn't dump raw metadata like "Title: ... Customer: ..."
+        overview_match = re.search(r"program\s+overview\s*:\s*(.+)", business_goal, re.IGNORECASE)
+        intro_description = overview_match.group(1).strip().rstrip(".") if overview_match else business_goal
+
+        # Build intro_p1 with grammatically correct phrasing.
+        # If the overview is a noun phrase starting with A/An/The (e.g. "An intensive program…"),
+        # embed it as "This program — X — is <description>" rather than "required to <noun phrase>".
+        if re.match(r"^(a|an|the)\s", intro_description, re.IGNORECASE):
+            # Lowercase the article so it reads naturally mid-sentence
+            desc_mid = intro_description[0].lower() + intro_description[1:]
+            intro_p1 = (
+                f"This program — {program_name} — is {desc_mid}. "
+                "The curriculum is structured to deliver progressive skill development across all covered topics."
+            )
+        else:
+            intro_p1 = (
+                f"This program — {program_name} — is designed to equip participants with the practical skills "
+                f"and theoretical knowledge required to {intro_description or '[TBD]'}. "
+                "The curriculum is structured to deliver progressive skill development across all covered topics."
+            )
         intro_p2 = (
             "Participants will engage with hands-on labs, guided exercises, and real-world scenarios throughout "
             "the program. Upon completion, learners will have a solid foundation to apply their skills in "
             "professional contexts and continue to advanced practice areas."
         )
 
-        # Build topic list: prefer scope items, fall back to functional requirements
         topics = scope_items or functional[:8] or ["Core Concepts", "Hands-on Practice", "Assessment"]
 
-        # Indicative design: paragraph + summary module table
         indicative = self._build_indicative_table(program_name, topics, total_duration_hours)
 
-        # Prerequisites: from constraints or generic based on topics
         prereq_items = constraints or [
             "Basic understanding of the subject domain covered in this program",
             "Familiarity with a command-line interface (Linux/macOS/Windows terminal)",
@@ -468,16 +477,14 @@ class DesignService:
         ]
         prerequisites = "\n".join(f"- {item}" for item in prereq_items)
 
-        # Key outcomes: transform functional requirements into learning outcome statements
         outcomes = self._to_learning_outcomes(functional) or [
             "Apply core concepts from the program in practical, real-world scenarios",
-            "Demonstrate proficiency with the tools and technologies covered",
+            "Demonstrate proficiency with the tools and techniques covered",
             "Design and implement solutions to domain-specific problems",
-            "Evaluate architectural trade-offs and select appropriate approaches",
+            "Evaluate trade-offs and select appropriate approaches for given contexts",
         ]
         key_outcomes = "\n".join(f"- {item}" for item in outcomes)
 
-        # Detailed design: rich per-module breakdown
         detailed_design = self._build_fallback_detailed(topics, total_duration_hours)
 
         return {
@@ -499,32 +506,75 @@ class DesignService:
             return int(match.group(1))
         return 40
 
+    def _strip_inline_duration(self, topic: str) -> tuple[str, int | None]:
+        """
+        Split "Cloud Computing (4 hrs)" into ("Cloud Computing", 4).
+        Returns (original_topic, None) if no duration pattern is found.
+        """
+        m = re.search(r"\((\d+)\s*hrs?\)", topic, re.IGNORECASE)
+        if m:
+            clean_name = topic[: m.start()].strip().rstrip(",;-— ")
+            return clean_name, int(m.group(1))
+        return topic, None
+
     def _to_learning_outcomes(self, functional_requirements: list[str]) -> list[str]:
         """
-        Convert functional requirement strings into learning outcome statements
-        by prefixing with action verbs.
+        Convert functional requirement strings into learning outcome statements.
+        - Strips inline duration hints like "(3 hrs)".
+        - Capstone items become "Demonstrate mastery through the <topic>" outcomes.
+        - Article-led names ("The Remote Leadership Mindset") have the article stripped
+          before the verb is prepended so outcomes don't read "Apply The ...".
+        - Gerund-starting names ("Leading…", "Building…") are used as-is.
+        - Other names get an action-verb prefix with original title case preserved.
         """
         action_verbs = ["Apply", "Implement", "Design", "Build", "Configure", "Analyze", "Deploy", "Evaluate"]
         outcomes = []
-        for i, req in enumerate(functional_requirements[:8]):
-            verb = action_verbs[i % len(action_verbs)]
-            # Clean up the requirement text a bit
-            clean = req.strip().rstrip(".")
-            if clean and not any(clean.lower().startswith(v.lower()) for v in action_verbs):
-                outcomes.append(f"{verb} {clean[0].lower()}{clean[1:]}")
-            else:
+        verb_index = 0
+        for req in functional_requirements:
+            clean, _ = self._strip_inline_duration(req)
+            clean = clean.strip().rstrip(".")
+            if not clean:
+                continue
+            # Capstone: generate a "Demonstrate mastery" outcome instead of skipping
+            if re.match(r"^capstone\b", clean, re.IGNORECASE):
+                topic = re.sub(r"^capstone\s*[—\-:]\s*", "", clean, flags=re.IGNORECASE).strip()
+                if topic:
+                    outcomes.append(f"Demonstrate mastery through the {topic}")
+                else:
+                    outcomes.append("Demonstrate program competencies through the capstone project")
+                continue
+            # Gerund-starting names already read as outcomes — use as-is
+            if re.match(r"^\w+ing\b", clean, re.IGNORECASE):
                 outcomes.append(clean)
+                continue
+            # Names that already open with one of our action verbs — use as-is
+            if any(clean.lower().startswith(v.lower()) for v in action_verbs):
+                outcomes.append(clean)
+                continue
+            # Strip leading article (A/An/The) so "Apply The Remote Leadership Mindset"
+            # becomes "Apply Remote Leadership Mindset principles"
+            clean_no_article = re.sub(r"^(a|an|the)\s+", "", clean, flags=re.IGNORECASE)
+            verb = action_verbs[verb_index % len(action_verbs)]
+            outcomes.append(f"{verb} {clean_no_article}")
+            verb_index += 1
         return outcomes
 
     def _build_indicative_table(self, program_name: str, topics: list[str], total_hours: int) -> str:
         """
-        Build the Indicative Design and Content Coverage section:
-        a brief paragraph followed by a module-level summary table.
+        Build the Indicative Design paragraph + module summary table.
+        Fix 2: Parse "(N hrs)" from topic names so each module shows its real
+        duration instead of an evenly-divided fallback value.
+        The Module column displays the clean name without the duration suffix.
         """
         if not topics:
             topics = ["Core Module"]
         n = len(topics)
-        hours_each = max(2, total_hours // n)
+
+        parsed: list[tuple[str, int | None]] = [self._strip_inline_duration(t) for t in topics]
+        use_embedded = all(h is not None for _, h in parsed)
+
+        if not use_embedded:
+            hours_each = max(2, total_hours // n)
 
         lines: list[str] = [
             f"This program — {program_name} — is structured across {n} modules, "
@@ -533,35 +583,45 @@ class DesignService:
             "| # | Module | Duration (Hours) |",
             "|---|---|---|",
         ]
-        for i, topic in enumerate(topics):
-            h = total_hours - hours_each * (n - 1) if i == n - 1 else hours_each
-            lines.append(f"| {i + 1} | {topic} | {h} |")
+        for i, (display_name, embedded_h) in enumerate(parsed):
+            if use_embedded:
+                h = embedded_h
+            else:
+                h = total_hours - hours_each * (n - 1) if i == n - 1 else hours_each
+            lines.append(f"| {i + 1} | {display_name} | {h} |")
         return "\n".join(lines)
 
     def _build_fallback_detailed(self, topics: list[str], total_hours: int) -> str:
         """
-        Generate the Detailed Design as a single flat markdown table matching the
-        NIIT StackRoute template format:
-        Module Name | Sub-topics / Detailed Technical Coverage | Duration (Hours) | Hands-on | Tools Needed
-        Every module is one row. Hours across all rows sum to total_hours.
+        Generate the Detailed Design as a single flat markdown table.
+        Fix 2 (also): Strips "(N hrs)" from module names so the Module Name
+        column stays clean — duration is already in the Duration column.
         """
         if not topics:
             topics = ["Core Module"]
         n = len(topics)
-        hours_each = max(2, total_hours // n)
+
+        parsed: list[tuple[str, int | None]] = [self._strip_inline_duration(t) for t in topics]
+        use_embedded = all(h is not None for _, h in parsed)
+
+        if not use_embedded:
+            hours_each = max(2, total_hours // n)
 
         rows = [
             "| Module Name | Sub-topics / Detailed Technical Coverage | Duration (Hours) | Hands-on | Tools Needed |",
             "|---|---|---|---|---|",
         ]
-        for i, topic in enumerate(topics):
+        for i, (display_name, embedded_h) in enumerate(parsed):
             mod_num = i + 1
-            mod_hours = total_hours - hours_each * (n - 1) if i == n - 1 else hours_each
+            if use_embedded:
+                mod_hours = embedded_h
+            else:
+                mod_hours = total_hours - hours_each * (n - 1) if i == n - 1 else hours_each
             rows.append(
-                f"| {mod_num}. {topic} "
-                f"| [Detailed sub-topics for {topic} — to be filled by the design team] "
+                f"| {mod_num}. {display_name} "
+                f"| [Detailed sub-topics for {display_name} — to be filled by the design team] "
                 f"| {mod_hours} "
-                f"| [Hands-on lab exercise for {topic} — TBD] "
+                f"| [Hands-on lab exercise for {display_name} — TBD] "
                 f"| [Tools required — TBD] |"
             )
         return "\n".join(rows)
