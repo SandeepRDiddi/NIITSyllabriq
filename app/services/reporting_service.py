@@ -53,7 +53,7 @@ class ReportingService:
         generated_events = [item for item in events if item.event_type == "design_generated"]
         export_events = [
             item for item in events
-            if item.event_type == "design_exported" and item.status == "final:pdf"
+            if item.event_type == "design_exported" and item.status in {"final:docx", "final:pdf"}
         ]
         active_tool_users = {
             item.actor_email

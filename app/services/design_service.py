@@ -205,17 +205,16 @@ class DesignService:
             raise ValueError("Review task not found")
         if not is_admin and task.reviewer_name != reviewer_name:
             raise ValueError("Reviewer does not match assigned task")
-        if task.status == "APPROVED":
+        design = session.get(DesignDocument, task.design_document_id)
+        if not design:
+            raise ValueError("Design not found")
+        if task.status == "APPROVED" or design.status == "FINAL_APPROVED":
             return task
 
         task.status = "APPROVED" if decision.lower() == "approve" else "REJECTED"
         task.comments = comments
         task.reviewed_at = datetime.utcnow()
         session.add(task)
-
-        design = session.get(DesignDocument, task.design_document_id)
-        if not design:
-            raise ValueError("Design not found")
 
         if task.review_type == "primary":
             if task.status == "REJECTED":
@@ -246,13 +245,24 @@ class DesignService:
                     ReviewTask.review_type == "final",
                 )
             ).all()
+            approved_reviewers = {
+                item.reviewer_name
+                for item in final_tasks
+                if item.status == "APPROVED"
+            }
+            required_final_approvals = max(1, len(set(settings.final_reviewer_list)))
             if any(item.status == "REJECTED" for item in final_tasks):
                 design.status = "FINAL_REWORK_REQUIRED"
-            elif final_tasks and all(item.status == "APPROVED" for item in final_tasks):
+            elif len(approved_reviewers) >= required_final_approvals:
                 design.status = "FINAL_APPROVED"
                 design.final_content = design.draft_content
                 final_path = self.storage_service.save_design(design.title, design.final_content, status="final")
                 design.final_path = str(final_path)
+                for item in final_tasks:
+                    if item.status == "PENDING":
+                        item.status = "SUPERSEDED"
+                        item.comments = "Closed automatically after final approval was completed."
+                        session.add(item)
 
         design.updated_at = datetime.utcnow()
         session.add(design)

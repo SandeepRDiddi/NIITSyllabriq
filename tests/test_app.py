@@ -171,7 +171,7 @@ def test_requirement_to_final_approval_flow():
 
     export = client.get(
         f"/designs/{design_id}/export",
-        params={"version": "final", "file_format": "pdf"},
+        params={"version": "final", "file_format": "docx"},
         headers=admin_headers,
     )
     assert export.status_code == 200

@@ -570,7 +570,7 @@ def reporting_summary(
 @router.get("/reports/leadership", response_model=LeadershipSummaryRead)
 def leadership_summary(
     session: Session = Depends(get_session),
-    _: User = Depends(require_roles(["admin", "svp", "executive"])),
+    _: User = Depends(require_roles(["admin", "leadership", "svp", "executive"])),
 ) -> LeadershipSummaryRead:
     summary = reporting_service.leadership_summary(session)
     return LeadershipSummaryRead(**summary)

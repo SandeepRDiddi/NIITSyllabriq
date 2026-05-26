@@ -239,7 +239,7 @@ export default function App() {
         setReportSummary(summary);
         setAllUsers(users);
       }
-      if (["admin", "svp", "executive"].includes(me.role)) {
+      if (["admin", "leadership", "svp", "executive"].includes(me.role)) {
         setLeadershipSummary(await api<LeadershipSummary>("/reports/leadership"));
       } else {
         setLeadershipSummary(null);
@@ -418,10 +418,10 @@ export default function App() {
     }
   }
 
-  async function exportDesign(designId: number, fileFormat: "md" | "docx" | "pdf") {
+  async function exportDesign(designId: number, fileFormat: "md" | "docx" | "pdf", version?: "draft" | "final") {
     try {
-      const version = fileFormat === "pdf" ? "final" : "draft";
-      const res = await fetch(`${API_BASE}/designs/${designId}/export?version=${version}&file_format=${fileFormat}`, {
+      const exportVersion = version || "draft";
+      const res = await fetch(`${API_BASE}/designs/${designId}/export?version=${exportVersion}&file_format=${fileFormat}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
@@ -432,7 +432,9 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `design-${designId}.${fileFormat}`;
+      const disposition = res.headers.get("content-disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      a.download = filenameMatch?.[1] || `design-${designId}.${fileFormat}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -494,7 +496,7 @@ export default function App() {
 
   const canEdit = user.role === "admin" || user.role === "designer";
   const canReview = ["admin", "primary_reviewer", "final_reviewer"].includes(user.role);
-  const canViewLeadership = ["admin", "svp", "executive"].includes(user.role);
+  const canViewLeadership = ["admin", "leadership", "svp", "executive"].includes(user.role);
   const pendingReviews = reviews.filter((r) => r.status === "PENDING").length;
 
   async function clearAllData() {
@@ -513,11 +515,11 @@ export default function App() {
 
   const tabs: { id: Tab; label: string; badge?: number }[] = [
     { id: "dashboard", label: "🏠 Dashboard" },
+    ...(canViewLeadership ? [{ id: "leaderboard" as Tab, label: "Leadership" }] : []),
     { id: "requirements", label: "Requirements" },
     { id: "designs", label: "Designs" },
     ...(canEdit ? [{ id: "training" as Tab, label: "Training Library" }] : []),
     ...(canReview ? [{ id: "reviews" as Tab, label: "Reviews", badge: pendingReviews }] : []),
-    ...(canViewLeadership ? [{ id: "leaderboard" as Tab, label: "Leadership" }] : []),
     ...(user.role === "admin" ? [{ id: "users" as Tab, label: "👥 Users" }] : []),
     ...(user.role === "admin" ? [{ id: "reports" as Tab, label: "Reports" }] : []),
   ];
@@ -988,7 +990,7 @@ export default function App() {
                     <th>Status</th>
                     <th>Similarity</th>
                     <th>Created by</th>
-                    <th>Export</th>
+                    <th>Download</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1020,8 +1022,8 @@ export default function App() {
                             )}
                             <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "md")}>Draft MD</button>
                             <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "docx")}>Draft DOCX</button>
-                            <button className="btn-sm btn-outline" onClick={() => exportDesign(d.id, "pdf")} disabled={!finalApproved} title={finalApproved ? "Download approved PDF" : "PDF is available after final approval"}>
-                              Final PDF
+                            <button className="btn-sm btn-success" onClick={() => exportDesign(d.id, "docx", "final")} disabled={!finalApproved} title={finalApproved ? "Download approved final design" : "Final design unlocks after both final approvals"}>
+                              Final Design
                             </button>
                           </div>
                         </td>
@@ -1208,17 +1210,17 @@ export default function App() {
                     </button>
                     <button
                       className="btn-sm btn-success"
-                      onClick={() => exportDesign(selectedDesign.id, "pdf")}
+                      onClick={() => exportDesign(selectedDesign.id, "docx", "final")}
                       disabled={selectedDesign.status !== "FINAL_APPROVED"}
-                      title={selectedDesign.status === "FINAL_APPROVED" ? "Download approved PDF" : "Final PDF unlocks after both final approvals"}
+                      title={selectedDesign.status === "FINAL_APPROVED" ? "Download approved final design" : "Final design unlocks after both final approvals"}
                     >
-                      Download Final PDF
+                      Download Final Design
                     </button>
                   </div>
                 </div>
                 {selectedDesign.status !== "FINAL_APPROVED" && (
                   <div className="alert alert-info">
-                    Final PDF will be available after primary approval and both final reviewer approvals are complete.
+                    Final design download will be available after primary approval and both final reviewer approvals are complete.
                   </div>
                 )}
                 <pre className="design-preview">{selectedDesign.final_content || selectedDesign.draft_content}</pre>
@@ -1326,8 +1328,7 @@ export default function App() {
                       <option value="designer">Designer — creates and submits designs</option>
                       <option value="primary_reviewer">Primary Reviewer — first approval gate</option>
                       <option value="final_reviewer">Final Reviewer — final sign-off</option>
-                      <option value="svp">SVP — leadership dashboard only</option>
-                      <option value="executive">Executive — leadership dashboard only</option>
+                      <option value="leadership">Leadership — leadership dashboard only</option>
                       <option value="admin">Admin — full access</option>
                     </select>
                   </div>
@@ -1397,7 +1398,7 @@ export default function App() {
             <div style={{ marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 22 }}>Leadership Dashboard</h2>
               <p className="hint" style={{ marginTop: 6 }}>
-                SVP+ view of adoption, successful design generation, approval throughput, and final PDF usage.
+                Leadership view of adoption, successful design generation, approval throughput, and final design downloads.
               </p>
             </div>
 
@@ -1424,7 +1425,7 @@ export default function App() {
               </div>
               <div className="metric metric-accent">
                 <span className="metric-value">{leadershipSummary.pdf_exports_count}</span>
-                <span className="metric-label">Final PDFs Downloaded</span>
+                <span className="metric-label">Final Designs Downloaded</span>
               </div>
               <div className="metric metric-accent">
                 <span className="metric-value">{leadershipSummary.requirements_count}</span>
@@ -1440,8 +1441,60 @@ export default function App() {
               </div>
             </div>
 
+            <div className="grid" style={{ marginBottom: 24 }}>
+              <div className="panel">
+                <p className="panel-title">Generation Funnel</p>
+                {[
+                  ["Requirements", leadershipSummary.requirements_count, "var(--accent)"],
+                  ["Generated Designs", leadershipSummary.designs_generated_count, "var(--red)"],
+                  ["Final Approved", leadershipSummary.final_approved_count, "var(--success)"],
+                  ["Final Downloads", leadershipSummary.pdf_exports_count, "var(--warning)"],
+                ].map(([label, value, color]) => {
+                  const maxValue = Math.max(leadershipSummary.requirements_count, leadershipSummary.designs_generated_count, 1);
+                  const width = Math.max(8, Math.round((Number(value) / maxValue) * 100));
+                  return (
+                    <div key={label as string} style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                        <span className="hint">{label}</span>
+                        <strong>{value}</strong>
+                      </div>
+                      <div className="score-bar-wrap" style={{ height: 12 }}>
+                        <div className="score-bar" style={{ width: `${width}%`, height: 12, background: color as string }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="panel">
+                <p className="panel-title">Approval Mix</p>
+                {[
+                  ["Approved", leadershipSummary.final_approved_count, "var(--success)"],
+                  ["Pending Review", leadershipSummary.pending_review_count, "var(--warning)"],
+                  ["Rejected / Rework", leadershipSummary.rejected_or_rework_count, "#f85149"],
+                ].map(([label, value, color]) => {
+                  const total = Math.max(
+                    leadershipSummary.final_approved_count + leadershipSummary.pending_review_count + leadershipSummary.rejected_or_rework_count,
+                    1,
+                  );
+                  const width = Math.max(8, Math.round((Number(value) / total) * 100));
+                  return (
+                    <div key={label as string} style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                        <span className="hint">{label}</span>
+                        <strong>{formatPercent(Number(value) / total)}</strong>
+                      </div>
+                      <div className="score-bar-wrap" style={{ height: 12 }}>
+                        <div className="score-bar" style={{ width: `${width}%`, height: 12, background: color as string }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="panel">
-              <p className="panel-title">Recent Executive Activity</p>
+              <p className="panel-title">Recent Leadership Activity</p>
               {leadershipSummary.recent_events.length === 0 ? (
                 <div className="empty">No activity recorded yet.</div>
               ) : (
