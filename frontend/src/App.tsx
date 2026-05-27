@@ -1442,67 +1442,76 @@ export default function App() {
 
         {/* ── Leadership tab ───────────────────────── */}
         {activeTab === "leaderboard" && canViewLeadership && leadershipSummary && (
-          <div>
-            <div style={{ marginBottom: 24 }}>
-              <h2 style={{ margin: 0, fontSize: 22 }}>Leadership Dashboard</h2>
-              <p className="hint" style={{ marginTop: 6 }}>
-                Leadership view of adoption, successful design generation, approval throughput, and final design downloads.
-              </p>
+          <div className="leadership-page">
+            <div className="executive-hero">
+              <div>
+                <p className="eyebrow">Leadership Command Center</p>
+                <h2>Design Automation Performance</h2>
+                <p>
+                  Adoption, throughput, approval health, final design downloads, and LLM spend in one operating view.
+                </p>
+              </div>
+              <div className="executive-hero-score">
+                <span>{formatPercent(leadershipSummary.success_rate)}</span>
+                <small>approval success rate</small>
+              </div>
             </div>
 
-            <div className="grid-3" style={{ marginBottom: 24 }}>
-              <div className="metric metric-accent">
+            <div className="executive-kpi-grid">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{leadershipSummary.active_tool_users_count}</span>
                 <span className="metric-label">Active Tool Users</span>
+                <span className="metric-note">{leadershipSummary.active_users_count} active accounts</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{leadershipSummary.designs_generated_count}</span>
                 <span className="metric-label">Designs Generated</span>
+                <span className="metric-note">{leadershipSummary.requirements_count} requirements received</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{leadershipSummary.final_approved_count}</span>
                 <span className="metric-label">Successfully Approved</span>
+                <span className="metric-note">{leadershipSummary.pending_review_count} still pending review</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{formatPercent(leadershipSummary.success_rate)}</span>
                 <span className="metric-label">Success Rate</span>
+                <span className="metric-note">approved / generated designs</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{formatPercent(leadershipSummary.average_design_score)}</span>
                 <span className="metric-label">Avg Design Score</span>
+                <span className="metric-note">quality and readiness score</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{leadershipSummary.pdf_exports_count}</span>
                 <span className="metric-label">Final Designs Downloaded</span>
+                <span className="metric-note">approved deliverables exported</span>
               </div>
-              <div className="metric metric-accent">
-                <span className="metric-value">{leadershipSummary.requirements_count}</span>
-                <span className="metric-label">Requirements Received</span>
-              </div>
-              <div className="metric metric-accent">
-                <span className="metric-value">{leadershipSummary.pending_review_count}</span>
-                <span className="metric-label">Pending Reviews</span>
-              </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{leadershipSummary.rejected_or_rework_count}</span>
                 <span className="metric-label">Rejected / Rework</span>
+                <span className="metric-note">items needing attention</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{usageSummary ? usageSummary.total_calls : 0}</span>
                 <span className="metric-label">LLM Calls</span>
+                <span className="metric-note">generation calls tracked</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">{usageSummary ? usageSummary.total_tokens.toLocaleString() : "0"}</span>
                 <span className="metric-label">Tokens Used</span>
+                <span className="metric-note">input + output tokens</span>
               </div>
-              <div className="metric metric-accent">
+              <div className="metric metric-accent executive-kpi">
                 <span className="metric-value">${usageSummary ? usageSummary.estimated_cost.toFixed(4) : "0.0000"}</span>
                 <span className="metric-label">Est. LLM Spend</span>
+                <span className="metric-note">provider-reported estimate</span>
               </div>
             </div>
 
-            <div className="grid" style={{ marginBottom: 24 }}>
-              <div className="panel">
+            <div className="executive-chart-grid">
+              <div className="panel executive-panel">
                 <p className="panel-title">Generation Funnel</p>
                 {[
                   ["Requirements", leadershipSummary.requirements_count, "var(--accent)"],
@@ -1518,15 +1527,15 @@ export default function App() {
                         <span className="hint">{label}</span>
                         <strong>{value}</strong>
                       </div>
-                      <div className="score-bar-wrap" style={{ height: 12 }}>
-                        <div className="score-bar" style={{ width: `${width}%`, height: 12, background: color as string }} />
+                      <div className="executive-bar-track">
+                        <div className="executive-bar" style={{ width: `${width}%`, background: color as string }} />
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="panel">
+              <div className="panel executive-panel">
                 <p className="panel-title">Approval Mix</p>
                 {[
                   ["Approved", leadershipSummary.final_approved_count, "var(--success)"],
@@ -1544,8 +1553,8 @@ export default function App() {
                         <span className="hint">{label}</span>
                         <strong>{formatPercent(Number(value) / total)}</strong>
                       </div>
-                      <div className="score-bar-wrap" style={{ height: 12 }}>
-                        <div className="score-bar" style={{ width: `${width}%`, height: 12, background: color as string }} />
+                      <div className="executive-bar-track">
+                        <div className="executive-bar" style={{ width: `${width}%`, background: color as string }} />
                       </div>
                     </div>
                   );
@@ -1553,8 +1562,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid" style={{ marginBottom: 24 }}>
-              <div className="panel">
+            <div className="executive-chart-grid">
+              <div className="panel executive-panel">
                 <p className="panel-title">Token Spend Snapshot</p>
                 {!usageSummary || usageSummary.total_calls === 0 ? (
                   <div className="empty" style={{ padding: "24px 0" }}>
@@ -1571,8 +1580,8 @@ export default function App() {
                             <span className="hint">{row.user_email}</span>
                             <strong>{row.total_tokens.toLocaleString()} tokens</strong>
                           </div>
-                          <div className="score-bar-wrap" style={{ height: 12 }}>
-                            <div className="score-bar" style={{ width: `${width}%`, height: 12, background: "var(--accent)" }} />
+                          <div className="executive-bar-track">
+                            <div className="executive-bar" style={{ width: `${width}%`, background: "var(--accent)" }} />
                           </div>
                         </div>
                       );
@@ -1581,7 +1590,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="panel">
+              <div className="panel executive-panel">
                 <p className="panel-title">LLM Cost Overview</p>
                 <div className="grid-3">
                   <div className="metric metric-accent">
