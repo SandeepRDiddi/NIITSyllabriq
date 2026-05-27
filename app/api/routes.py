@@ -20,7 +20,7 @@ from app.schemas.common import HealthResponse, MessageResponse
 from app.schemas.design import DesignRead, DesignSummaryRead, GenerateDesignRequest, ReferenceRead, ScoreCardRead
 from app.schemas.requirement import RequirementCreateResponse, RequirementRead, RequirementTextCreate
 from app.schemas.review import ReviewSubmitRequest, ReviewTaskRead
-from app.schemas.training import LeadershipSummaryRead, ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
+from app.schemas.training import LLMUsageSummaryRead, LeadershipSummaryRead, ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
 from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service, get_current_user, require_roles
 from app.services.design_service import DesignService
@@ -574,6 +574,15 @@ def leadership_summary(
 ) -> LeadershipSummaryRead:
     summary = reporting_service.leadership_summary(session)
     return LeadershipSummaryRead(**summary)
+
+
+@router.get("/reports/usage", response_model=LLMUsageSummaryRead)
+def llm_usage_summary(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles(["admin", "leadership", "svp", "executive"])),
+) -> LLMUsageSummaryRead:
+    summary = reporting_service.llm_usage_summary(session)
+    return LLMUsageSummaryRead(**summary)
 
 
 @router.get("/reports/events", response_model=List[WorkflowEventRead])

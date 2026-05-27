@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import httpx
 
 from app.core.config import settings
+
+
+@dataclass
+class LLMUsage:
+    provider: str
+    model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 class GroqClient:
@@ -19,6 +30,7 @@ class GroqClient:
     def __init__(self) -> None:
         self.api_key = settings.groq_api_key
         self.model = settings.groq_model
+        self.last_usage: LLMUsage | None = None
 
     def is_reachable(self) -> bool:
         return bool(self.api_key)
@@ -42,6 +54,15 @@ class GroqClient:
         try:
             response = httpx.post(self.BASE_URL, json=payload, headers=headers, timeout=120.0)
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            data = response.json()
+            usage = data.get("usage") or {}
+            self.last_usage = LLMUsage(
+                provider="groq",
+                model=self.model,
+                prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                completion_tokens=int(usage.get("completion_tokens") or 0),
+                total_tokens=int(usage.get("total_tokens") or 0),
+            )
+            return data["choices"][0]["message"]["content"]
         except Exception:
             return None

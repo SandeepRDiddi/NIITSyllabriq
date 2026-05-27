@@ -53,3 +53,34 @@ class LeadershipSummaryRead(BaseModel):
     success_rate: float
     average_design_score: float
     recent_events: List[WorkflowEventRead]
+
+
+class LLMUsageEventRead(BaseModel):
+    id: int
+    provider: str
+    model: str
+    user_email: str
+    entity_type: str
+    entity_id: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: float
+    created_at: datetime
+
+
+class LLMUsageByUserRead(BaseModel):
+    user_email: str
+    calls_count: int
+    total_tokens: int
+    estimated_cost: float
+
+
+class LLMUsageSummaryRead(BaseModel):
+    total_calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    estimated_cost: float
+    by_user: List[LLMUsageByUserRead]
+    recent_events: List[LLMUsageEventRead]

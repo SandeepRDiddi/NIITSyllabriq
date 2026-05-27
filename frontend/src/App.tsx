@@ -121,9 +121,40 @@ type LeadershipSummary = {
   recent_events: WorkflowEvent[];
 };
 
+type LLMUsageEvent = {
+  id: number;
+  provider: string;
+  model: string;
+  user_email: string;
+  entity_type: string;
+  entity_id: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  created_at: string;
+};
+
+type LLMUsageByUser = {
+  user_email: string;
+  calls_count: number;
+  total_tokens: number;
+  estimated_cost: number;
+};
+
+type LLMUsageSummary = {
+  total_calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  by_user: LLMUsageByUser[];
+  recent_events: LLMUsageEvent[];
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "leaderboard" | "reports" | "users";
+type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "leaderboard" | "usage" | "reports" | "users";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -157,6 +188,7 @@ export default function App() {
   const [trainingDocuments, setTrainingDocuments] = useState<TrainingDocument[]>([]);
   const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
   const [leadershipSummary, setLeadershipSummary] = useState<LeadershipSummary | null>(null);
+  const [usageSummary, setUsageSummary] = useState<LLMUsageSummary | null>(null);
   const [loginForm, setLoginForm] = useState({ email: "admin@niit.com", password: "Admin@123" });
   // Requirements come in via email or call — no file upload needed
   const [reqForm, setReqForm] = useState({
@@ -240,9 +272,15 @@ export default function App() {
         setAllUsers(users);
       }
       if (["admin", "leadership", "svp", "executive"].includes(me.role)) {
-        setLeadershipSummary(await api<LeadershipSummary>("/reports/leadership"));
+        const [leadership, usage] = await Promise.all([
+          api<LeadershipSummary>("/reports/leadership"),
+          api<LLMUsageSummary>("/reports/usage"),
+        ]);
+        setLeadershipSummary(leadership);
+        setUsageSummary(usage);
       } else {
         setLeadershipSummary(null);
+        setUsageSummary(null);
       }
     } catch {
       setToken("");
@@ -520,6 +558,7 @@ export default function App() {
     { id: "designs", label: "Designs" },
     ...(canEdit ? [{ id: "training" as Tab, label: "Training Library" }] : []),
     ...(canReview ? [{ id: "reviews" as Tab, label: "Reviews", badge: pendingReviews }] : []),
+    ...(canViewLeadership ? [{ id: "usage" as Tab, label: "Usage" }] : []),
     ...(user.role === "admin" ? [{ id: "users" as Tab, label: "👥 Users" }] : []),
     ...(user.role === "admin" ? [{ id: "reports" as Tab, label: "Reports" }] : []),
   ];
@@ -1521,6 +1560,103 @@ export default function App() {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Usage tab ─────────────────────────────── */}
+        {activeTab === "usage" && canViewLeadership && usageSummary && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ margin: 0, fontSize: 22 }}>LLM Usage</h2>
+              <p className="hint" style={{ marginTop: 6 }}>
+                Token usage and estimated cost across Groq now, with the same model ready for Claude/OpenAI providers later.
+              </p>
+            </div>
+
+            <div className="grid-3" style={{ marginBottom: 24 }}>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary.total_calls}</span>
+                <span className="metric-label">LLM Calls</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary.total_tokens.toLocaleString()}</span>
+                <span className="metric-label">Total Tokens</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">${usageSummary.estimated_cost.toFixed(4)}</span>
+                <span className="metric-label">Estimated Cost</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary.prompt_tokens.toLocaleString()}</span>
+                <span className="metric-label">Input Tokens</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary.completion_tokens.toLocaleString()}</span>
+                <span className="metric-label">Output Tokens</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary.by_user.length}</span>
+                <span className="metric-label">Users Consuming LLM</span>
+              </div>
+            </div>
+
+            <div className="grid" style={{ marginBottom: 24 }}>
+              <div className="panel">
+                <p className="panel-title">Usage by User</p>
+                {usageSummary.by_user.length === 0 ? (
+                  <div className="empty">No LLM usage recorded yet.</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Calls</th>
+                        <th>Tokens</th>
+                        <th>Est. Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usageSummary.by_user.map((row) => (
+                        <tr key={row.user_email}>
+                          <td style={{ fontWeight: 600 }}>{row.user_email}</td>
+                          <td>{row.calls_count}</td>
+                          <td>{row.total_tokens.toLocaleString()}</td>
+                          <td>${row.estimated_cost.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="panel">
+                <p className="panel-title">Recent LLM Calls</p>
+                {usageSummary.recent_events.length === 0 ? (
+                  <div className="empty">No LLM calls recorded yet.</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Provider</th>
+                        <th>User</th>
+                        <th>Tokens</th>
+                        <th>Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usageSummary.recent_events.map((event) => (
+                        <tr key={event.id}>
+                          <td>{event.provider} / {event.model}</td>
+                          <td className="hint">{event.user_email}</td>
+                          <td>{event.total_tokens.toLocaleString()}</td>
+                          <td>${event.estimated_cost.toFixed(4)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           </div>
         )}

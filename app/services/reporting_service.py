@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.models.design import DesignDocument, ScoreCard
 from app.models.requirement import Requirement
 from app.models.review import ReviewTask
-from app.models.training import TrainingDocument, WorkflowEvent
+from app.models.training import LLMUsageEvent, TrainingDocument, WorkflowEvent
 from app.models.user import User
 
 
@@ -92,5 +92,47 @@ class ReportingService:
                     "created_at": item.created_at,
                 }
                 for item in recent_events
+            ],
+        }
+
+    def llm_usage_summary(self, session: Session) -> dict:
+        events = session.exec(select(LLMUsageEvent).order_by(LLMUsageEvent.created_at.desc())).all()
+        by_user: dict[str, dict[str, int | float | str]] = {}
+        for event in events:
+            row = by_user.setdefault(
+                event.user_email,
+                {
+                    "user_email": event.user_email,
+                    "calls_count": 0,
+                    "total_tokens": 0,
+                    "estimated_cost": 0.0,
+                },
+            )
+            row["calls_count"] = int(row["calls_count"]) + 1
+            row["total_tokens"] = int(row["total_tokens"]) + event.total_tokens
+            row["estimated_cost"] = round(float(row["estimated_cost"]) + event.estimated_cost, 6)
+
+        return {
+            "total_calls": len(events),
+            "prompt_tokens": sum(item.prompt_tokens for item in events),
+            "completion_tokens": sum(item.completion_tokens for item in events),
+            "total_tokens": sum(item.total_tokens for item in events),
+            "estimated_cost": round(sum(item.estimated_cost for item in events), 6),
+            "by_user": sorted(by_user.values(), key=lambda item: int(item["total_tokens"]), reverse=True),
+            "recent_events": [
+                {
+                    "id": item.id or 0,
+                    "provider": item.provider,
+                    "model": item.model,
+                    "user_email": item.user_email,
+                    "entity_type": item.entity_type,
+                    "entity_id": item.entity_id,
+                    "prompt_tokens": item.prompt_tokens,
+                    "completion_tokens": item.completion_tokens,
+                    "total_tokens": item.total_tokens,
+                    "estimated_cost": item.estimated_cost,
+                    "created_at": item.created_at,
+                }
+                for item in events[:20]
             ],
         }

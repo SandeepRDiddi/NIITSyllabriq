@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.design import DesignDocument, RetrievedReference, ScoreCard
 from app.models.requirement import Requirement
 from app.models.review import ReviewTask
+from app.models.training import LLMUsageEvent
 from app.services.audit_service import audit_service
 from app.services.groq_client import GroqClient
 from app.services.ollama_client import OllamaClient
@@ -137,6 +138,7 @@ class DesignService:
         session.add(design)
         session.commit()
         session.refresh(design)
+        self._record_llm_usage(session, requested_by, design.id or 0)
         audit_service.log_event(
             session=session,
             event_type="design_generated",
@@ -198,6 +200,44 @@ class DesignService:
 
         session.commit()
         return design
+
+    def _record_llm_usage(self, session: Session, user_email: str, design_id: int) -> None:
+        usage = getattr(self.llm, "last_usage", None)
+        if not usage:
+            return
+        session.add(
+            LLMUsageEvent(
+                provider=usage.provider,
+                model=usage.model,
+                user_email=user_email,
+                entity_type="design_document",
+                entity_id=design_id,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+                estimated_cost=self._estimate_llm_cost(
+                    usage.provider,
+                    usage.model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                ),
+            )
+        )
+        session.commit()
+
+    def _estimate_llm_cost(self, provider: str, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+        provider_key = provider.lower()
+        model_key = model.lower()
+        input_per_million = 0.0
+        output_per_million = 0.0
+        if provider_key == "groq" and "llama-3.3-70b" in model_key:
+            input_per_million = 0.59
+            output_per_million = 0.79
+        return round(
+            (prompt_tokens / 1_000_000 * input_per_million)
+            + (completion_tokens / 1_000_000 * output_per_million),
+            6,
+        )
 
     def submit_review(self, session: Session, task_id: int, reviewer_name: str, decision: str, comments: str, is_admin: bool = False) -> ReviewTask:
         task = session.get(ReviewTask, task_id)

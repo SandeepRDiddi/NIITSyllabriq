@@ -7,9 +7,9 @@
 [![Alembic](https://img.shields.io/badge/Alembic-Migrations-4B5563)](./alembic)
 [![License](https://img.shields.io/badge/License-Private-informational)](#)
 
-NIITSyllabriq is a local-first, enterprise-oriented design automation platform for turning customer requirements into governed solution design documents.
+NIITSyllabriq is an enterprise-oriented design automation platform for turning customer requirements into governed solution design documents.
 
-It combines retrieval, template-driven generation, human review, approval workflows, document export, and database-level reporting into one operating model that can run on a desktop, an internal server, or a hybrid setup.
+It combines retrieval, template-driven generation, human review, approval workflows, final design export, and database-level reporting into one operating model that can run on a desktop, an internal server, or a hosted SaaS setup.
 
 ## Executive Summary
 
@@ -40,11 +40,14 @@ NIITSyllabriq packages those needs into a single workflow:
 - Requirement ingestion from `txt`, `md`, `pdf`, and `docx`
 - Training library ingestion for historical design documents
 - Similarity search across requirements and trained document baselines
-- Template-guided design generation with optional Ollama-based local LLM support
-- Role-based access for admins, designers, primary reviewers, and final reviewers
+- Template-guided design generation with configurable LLM providers (`ollama` for local inference or `groq` for fast hosted demo generation)
+- Chunked training-library retrieval for uploaded historical design documents
+- Role-based access for admins, designers, primary reviewers, final reviewers, and leadership viewers
 - One primary review plus two final reviewer approvals
 - Design quality scoring and traceability
-- Export to Markdown, DOCX, and PDF
+- Draft export to Markdown and DOCX
+- Approved final design export to DOCX after all approvals are complete
+- Leadership dashboard for adoption, generation success, approval throughput, and final-design downloads
 - React frontend and Electron desktop shell
 - Postgres-ready persistence with Alembic migrations
 - Workflow-event logging for audit and reporting
@@ -81,7 +84,7 @@ flowchart LR
     M --> N{"Both Approved?"}
     N -- "No" --> K
     N -- "Yes" --> O["Final Approved Design"]
-    O --> P["Markdown / DOCX / PDF Export"]
+    O --> P["Final DOCX Export"]
 
     B --> Q["Workflow Event Log"]
     U --> Q
@@ -99,13 +102,13 @@ flowchart LR
 
 | Area | What It Does |
 | --- | --- |
-| Training Library | Ingests historical PDFs and design documents to seed reusable knowledge |
+| Training Library | Ingests historical PDFs and design documents, chunks them, and stores reusable knowledge |
 | Requirement Intake | Parses new customer requirements into normalized structured content |
-| Retrieval Layer | Matches new requirements against prior requirements and training documents |
-| Draft Generation | Produces NIIT-template drafts with optional local LLM enhancement |
+| Retrieval Layer | Matches new requirements against prior requirements and chunked training documents |
+| Draft Generation | Produces NIIT-template drafts with local or hosted LLM generation |
 | Human Governance | Routes drafts through primary review and two final approvals |
-| Export Layer | Produces Markdown, DOCX, and PDF outputs |
-| Reporting | Tracks workflow events, approval states, scores, and reuse references in the database |
+| Export Layer | Produces draft Markdown/DOCX and approved final DOCX deliverables |
+| Reporting | Tracks workflow events, approval states, scores, reuse references, adoption, and final-design downloads |
 
 ## Technology Stack
 
@@ -116,6 +119,7 @@ flowchart LR
 - Alembic
 - Postgres or SQLite
 - Ollama integration for local model inference
+- Groq integration for fast hosted generation during demo/pilot deployments
 
 ### Frontend
 
@@ -130,6 +134,12 @@ flowchart LR
 
 - `python-docx`
 - `pypdf`
+
+### LLM Providers
+
+- `ollama`: private local or internal inference
+- `groq`: fast hosted generation for demo and pilot deployments
+- Planned: Anthropic Claude / OpenAI provider support with API-key based tenant configuration and token usage reporting
 
 ## Repository Structure
 
@@ -149,6 +159,20 @@ tests/              API and workflow tests
 ```
 
 ## Quick Start
+
+### Fast Demo Mode with Groq
+
+For development and demo environments where laptop or droplet resources are limited, use Groq for generation and keep training lightweight:
+
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=<your-groq-api-key>
+GROQ_MODEL=llama-3.3-70b-versatile
+TRAINING_USE_LLM_NORMALIZATION=false
+TRAINING_EMBED_ON_UPLOAD=false
+```
+
+This keeps the product workflow fast while preserving the approval, reporting, and final-design export flow.
 
 ### Docker Compose with Local LLM
 
@@ -210,6 +234,7 @@ npm start
 - `primary.reviewer@niit.com / Reviewer@123`
 - `final.reviewer1@niit.com / Reviewer@123`
 - `final.reviewer2@niit.com / Reviewer@123`
+- `leadership@niit.com / Leader@123`
 
 ## Recommended Demo Flow
 
@@ -224,8 +249,8 @@ The shortest useful demo is:
 5. Review similarity match and score
 6. Approve as primary reviewer
 7. Approve as both final reviewers
-8. Export the final design
-9. Open reporting summary and workflow-event history
+8. Download the approved final design as DOCX
+9. Open reporting summary, leadership dashboard, and workflow-event history
 
 ## Documentation Map
 
@@ -234,6 +259,7 @@ The shortest useful demo is:
 - [PRODUCTION_FLOW_GUIDE.md](./PRODUCTION_FLOW_GUIDE.md): operator walkthrough for the full lifecycle
 - [SETUP_GUIDE.md](./SETUP_GUIDE.md): environment and local setup details
 - [LOCAL_LLM_DEPLOYMENT.md](./LOCAL_LLM_DEPLOYMENT.md): Ollama deployment, production env, and model recommendations
+- [DEPLOY_DIGITALOCEAN_DROPLET.md](./DEPLOY_DIGITALOCEAN_DROPLET.md): fast DigitalOcean droplet deployment using Docker Compose, Postgres, and Groq
 - [design-automation-architecture.md](./design-automation-architecture.md): earlier solution architecture notes
 
 ## API Highlights
@@ -268,6 +294,7 @@ The shortest useful demo is:
 ### Reporting
 
 - `GET /reports/summary`
+- `GET /reports/leadership`
 - `GET /reports/events`
 
 ## Deployment Modes
@@ -310,6 +337,39 @@ Best for:
 - local drafting with shared governance
 - sensitive document handling
 - centralized reporting with distributed generation
+
+### DigitalOcean Demo / Pilot
+
+Best for:
+
+- avoiding laptop crashes during generation
+- sharing a browser-accessible pilot with reviewers and leaders
+- running Postgres, backend, and frontend on a cost-effective droplet
+
+Typical stack:
+
+- Docker Compose on a DigitalOcean droplet
+- Postgres container for demo data
+- Groq API for generation
+- Lightweight training mode with chunked retrieval
+
+For commands, see [DEPLOY_DIGITALOCEAN_DROPLET.md](./DEPLOY_DIGITALOCEAN_DROPLET.md).
+
+## Claude / Enterprise LLM Subscriptions
+
+An organization's Claude web/app subscription is not automatically usable by this backend. Product integration requires an API-capable provider path, such as:
+
+- Anthropic API key owned by the organization
+- cloud provider model access, such as AWS Bedrock with Claude models
+- future tenant-level provider configuration in this product
+
+Planned SaaS capability:
+
+- allow each organization to configure its LLM provider/API key
+- track estimated input/output tokens per generation
+- show token usage by user, organization, and date range
+- expose a usage tab for admins and leadership viewers
+- support budget alerts or per-tenant limits
 
 ## Development and Validation
 

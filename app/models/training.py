@@ -38,3 +38,17 @@ class WorkflowEvent(SQLModel, table=True):
     status: str = Field(index=True)
     details_json: str
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class LLMUsageEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    provider: str = Field(index=True)
+    model: str = Field(index=True)
+    user_email: str = Field(index=True)
+    entity_type: str = Field(index=True)
+    entity_id: int = Field(index=True)
+    prompt_tokens: int = Field(default=0)
+    completion_tokens: int = Field(default=0)
+    total_tokens: int = Field(default=0)
+    estimated_cost: float = Field(default=0.0)
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)

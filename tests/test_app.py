@@ -191,6 +191,12 @@ def test_requirement_to_final_approval_flow():
     assert leadership_summary["final_approved_count"] >= 1
     assert leadership_summary["pdf_exports_count"] >= 1
 
+    usage = client.get("/reports/usage", headers=admin_headers)
+    assert usage.status_code == 200
+    usage_summary = usage.json()
+    assert "total_tokens" in usage_summary
+    assert "recent_events" in usage_summary
+
     events = client.get("/reports/events", headers=admin_headers)
     assert events.status_code == 200
     event_types = {event["event_type"] for event in events.json()}
