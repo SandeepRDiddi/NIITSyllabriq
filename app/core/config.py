@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     ollama_embed_timeout_seconds: float = 10.0
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-3-5-sonnet-latest"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+    openai_compatible_api_key: str = ""
+    openai_compatible_base_url: str = ""
     training_use_llm_normalization: bool = False
     training_embed_on_upload: bool = False
     training_chunk_max_chars: int = 1800

@@ -13,9 +13,12 @@ from app.models.design import DesignDocument, RetrievedReference, ScoreCard
 from app.models.requirement import Requirement
 from app.models.review import ReviewTask
 from app.models.training import LLMUsageEvent
+from app.services.anthropic_client import AnthropicClient
 from app.services.audit_service import audit_service
 from app.services.groq_client import GroqClient
+from app.services.llm_config_service import llm_config_service
 from app.services.ollama_client import OllamaClient
+from app.services.openai_client import OpenAIClient
 from app.services.scoring_service import ScoringService
 from app.services.similarity_service import SimilarityService
 from app.services.storage_service import StorageService
@@ -84,22 +87,42 @@ Study this example carefully — your output must match this level of detail:
 
 class DesignService:
     def __init__(self) -> None:
-        self.llm = self._build_llm_client()
         self.similarity_service = SimilarityService()
         self.scoring_service = ScoringService()
         self.storage_service = StorageService()
         self.template_path = Path(settings.template_dir) / "niit_template.md"
 
-    def _build_llm_client(self) -> OllamaClient | GroqClient:
-        provider = settings.llm_provider.strip().lower()
+    def _build_llm_client(self, session: Session) -> OllamaClient | GroqClient | AnthropicClient | OpenAIClient:
+        config = llm_config_service.get_active_config(session)
+        provider = config.provider.strip().lower()
         if provider == "ollama":
-            return OllamaClient()
+            return OllamaClient(base_url=config.base_url or settings.ollama_base_url, generation_model=config.model)
         if provider == "groq":
-            groq = GroqClient()
+            groq = GroqClient(api_key=config.api_key, model=config.model)
             if not groq.is_reachable():
                 raise ValueError("LLM_PROVIDER=groq requires GROQ_API_KEY to be set")
             return groq
-        raise ValueError("LLM_PROVIDER must be either 'ollama' or 'groq'")
+        if provider == "anthropic":
+            anthropic = AnthropicClient(api_key=config.api_key, model=config.model)
+            if not anthropic.is_reachable():
+                raise ValueError("Anthropic requires an API key to be set in Admin LLM Configuration")
+            return anthropic
+        if provider == "openai":
+            openai = OpenAIClient(api_key=config.api_key, model=config.model)
+            if not openai.is_reachable():
+                raise ValueError("OpenAI requires an API key to be set in Admin LLM Configuration")
+            return openai
+        if provider == "openai_compatible":
+            compatible = OpenAIClient(
+                api_key=config.api_key,
+                model=config.model,
+                base_url=config.base_url,
+                provider="openai_compatible",
+            )
+            if not compatible.is_reachable() or not config.base_url:
+                raise ValueError("OpenAI-compatible providers require API key and base URL")
+            return compatible
+        raise ValueError("LLM provider must be ollama, groq, anthropic, openai, or openai_compatible")
 
     # ------------------------------------------------------------------
     # Public API
@@ -119,7 +142,8 @@ class DesignService:
         best_match = matches[0] if matches else None
         reused_content = bool(best_match and best_match.similarity_score >= settings.similarity_threshold)
 
-        draft = self._render_draft(requirement.title, requirement.raw_text, normalized_requirement, best_match)
+        llm = self._build_llm_client(session)
+        draft = self._render_draft(requirement.title, requirement.raw_text, normalized_requirement, best_match, llm)
         traceability_map = self._build_traceability(normalized_requirement, draft)
         draft_path = self.storage_service.save_design(requirement.title, draft, status="draft")
 
@@ -138,7 +162,7 @@ class DesignService:
         session.add(design)
         session.commit()
         session.refresh(design)
-        self._record_llm_usage(session, requested_by, design.id or 0)
+        self._record_llm_usage(session, requested_by, design.id or 0, llm)
         audit_service.log_event(
             session=session,
             event_type="design_generated",
@@ -201,8 +225,8 @@ class DesignService:
         session.commit()
         return design
 
-    def _record_llm_usage(self, session: Session, user_email: str, design_id: int) -> None:
-        usage = getattr(self.llm, "last_usage", None)
+    def _record_llm_usage(self, session: Session, user_email: str, design_id: int, llm: object) -> None:
+        usage = getattr(llm, "last_usage", None)
         if not usage:
             return
         session.add(
@@ -233,6 +257,18 @@ class DesignService:
         if provider_key == "groq" and "llama-3.3-70b" in model_key:
             input_per_million = 0.59
             output_per_million = 0.79
+        elif provider_key == "anthropic" and "haiku" in model_key:
+            input_per_million = 0.80
+            output_per_million = 4.00
+        elif provider_key == "anthropic" and "sonnet" in model_key:
+            input_per_million = 3.00
+            output_per_million = 15.00
+        elif provider_key == "openai" and ("gpt-4o-mini" in model_key or "gpt-4.1-mini" in model_key):
+            input_per_million = 0.15
+            output_per_million = 0.60
+        elif provider_key == "openai" and ("gpt-4o" in model_key or "gpt-4.1" in model_key):
+            input_per_million = 2.50
+            output_per_million = 10.00
         return round(
             (prompt_tokens / 1_000_000 * input_per_million)
             + (completion_tokens / 1_000_000 * output_per_million),
@@ -334,6 +370,7 @@ class DesignService:
         raw_text: str,
         normalized_requirement: dict[str, object],
         best_match,
+        llm: object,
     ) -> str:
         """
         Render the Jinja2 NIIT StackRoute template.
@@ -347,8 +384,7 @@ class DesignService:
         template = Template(self.template_path.read_text(encoding="utf-8"))
         context = self._build_fallback_context(title, normalized_requirement, best_match)
 
-        # Generate via Groq (if GROQ_API_KEY is set) or local Ollama
-        llm_result = self.llm.generate(
+        llm_result = llm.generate(
             prompt=self._build_llm_user_prompt(title, raw_text, best_match),
             system_prompt=_STACKROUTE_SYSTEM_PROMPT,
         )

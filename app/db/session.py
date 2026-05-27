@@ -11,6 +11,7 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 
 def init_db() -> None:
     from app.models.design import DesignDocument, RetrievedReference, ScoreCard
+    from app.models.llm_config import LLMProviderConfig
     from app.models.requirement import Requirement
     from app.models.review import ReviewTask
     from app.models.training import LLMUsageEvent, TrainingChunk, TrainingDocument, WorkflowEvent

@@ -152,9 +152,20 @@ type LLMUsageSummary = {
   recent_events: LLMUsageEvent[];
 };
 
+type LLMProviderConfig = {
+  id: number;
+  provider: string;
+  model: string;
+  base_url: string;
+  is_active: boolean;
+  has_api_key: boolean;
+  updated_by: string;
+  updated_at: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "leaderboard" | "usage" | "reports" | "users";
+type Tab = "dashboard" | "training" | "requirements" | "designs" | "reviews" | "leaderboard" | "usage" | "reports" | "users" | "llm-config";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -198,6 +209,8 @@ export default function App() {
   const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
   const [leadershipSummary, setLeadershipSummary] = useState<LeadershipSummary | null>(null);
   const [usageSummary, setUsageSummary] = useState<LLMUsageSummary | null>(null);
+  const [llmConfig, setLlmConfig] = useState<LLMProviderConfig | null>(null);
+  const [llmForm, setLlmForm] = useState({ provider: "ollama", model: "qwen2.5:7b-instruct", base_url: "http://localhost:11434", api_key: "" });
   const [loginForm, setLoginForm] = useState({ email: "admin@niit.com", password: "Admin@123" });
   // Requirements come in via email or call — no file upload needed
   const [reqForm, setReqForm] = useState({
@@ -273,12 +286,22 @@ export default function App() {
         setReviews([]);
       }
       if (me.role === "admin") {
-        const [summary, users] = await Promise.all([
+        const [summary, users, activeLlm] = await Promise.all([
           api<ReportSummary>("/reports/summary"),
           api<User[]>("/users"),
+          api<LLMProviderConfig>("/admin/llm-config"),
         ]);
         setReportSummary(summary);
         setAllUsers(users);
+        setLlmConfig(activeLlm);
+        setLlmForm({
+          provider: activeLlm.provider,
+          model: activeLlm.model,
+          base_url: activeLlm.base_url,
+          api_key: "",
+        });
+      } else {
+        setLlmConfig(null);
       }
       if (["admin", "leadership", "svp", "executive"].includes(me.role)) {
         const [leadership, usage] = await Promise.all([
@@ -408,6 +431,39 @@ export default function App() {
       await refreshDashboard();
     } catch (err) {
       notify(`Create user failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveLlmConfig(e: FormEvent) {
+    e.preventDefault();
+    if (!llmForm.provider || !llmForm.model.trim()) {
+      notify("Provider and model are required.", "error");
+      return;
+    }
+    if (llmForm.provider === "openai_compatible" && !llmForm.base_url.trim()) {
+      notify("OpenAI-compatible vendors require a base URL.", "error");
+      return;
+    }
+    setLoading(true);
+    try {
+      const saved = await api<LLMProviderConfig>("/admin/llm-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: llmForm.provider,
+          model: llmForm.model.trim(),
+          base_url: llmForm.base_url.trim(),
+          api_key: llmForm.api_key.trim() || null,
+        }),
+      });
+      setLlmConfig(saved);
+      setLlmForm({ provider: saved.provider, model: saved.model, base_url: saved.base_url, api_key: "" });
+      notify("LLM configuration updated.");
+      await refreshDashboard();
+    } catch (err) {
+      notify(`LLM configuration failed: ${err instanceof Error ? err.message : String(err)}`, "error");
     } finally {
       setLoading(false);
     }
@@ -569,6 +625,7 @@ export default function App() {
     ...(canReview ? [{ id: "reviews" as Tab, label: "Reviews", badge: pendingReviews }] : []),
     ...(canViewLeadership ? [{ id: "usage" as Tab, label: "Usage" }] : []),
     ...(user.role === "admin" ? [{ id: "users" as Tab, label: "👥 Users" }] : []),
+    ...(user.role === "admin" ? [{ id: "llm-config" as Tab, label: "LLM Config" }] : []),
     ...(user.role === "admin" ? [{ id: "reports" as Tab, label: "Reports" }] : []),
   ];
 
@@ -1440,6 +1497,92 @@ export default function App() {
           </div>
         )}
 
+        {/* ── LLM Config tab ────────────────────────── */}
+        {activeTab === "llm-config" && user.role === "admin" && (
+          <div>
+            <div className="panel" style={{ marginBottom: 24 }}>
+              <p className="panel-title">LLM Provider Configuration</p>
+              <p className="hint" style={{ marginBottom: 16 }}>
+                Default is local Ollama. Switch here only when the business has approved API access for Claude, OpenAI, Groq, or another OpenAI-compatible vendor.
+              </p>
+              {llmConfig && (
+                <div className="alert alert-info">
+                  Active provider: <strong>{llmConfig.provider.replace(/_/g, " ")}</strong> using <strong>{llmConfig.model}</strong>
+                  {llmConfig.has_api_key ? " with API key saved." : " with no API key saved."}
+                </div>
+              )}
+              <form onSubmit={saveLlmConfig}>
+                <div className="grid" style={{ marginBottom: 12 }}>
+                  <div className="field">
+                    <label>Provider</label>
+                    <select
+                      value={llmForm.provider}
+                      onChange={e => {
+                        const provider = e.target.value;
+                        const defaults: Record<string, { model: string; base_url: string }> = {
+                          ollama: { model: "qwen2.5:7b-instruct", base_url: "http://localhost:11434" },
+                          groq: { model: "llama-3.3-70b-versatile", base_url: "" },
+                          anthropic: { model: "claude-3-5-sonnet-latest", base_url: "" },
+                          openai: { model: "gpt-4o", base_url: "" },
+                          openai_compatible: { model: "", base_url: "" },
+                        };
+                        setLlmForm({ ...llmForm, provider, ...defaults[provider], api_key: "" });
+                      }}
+                    >
+                      <option value="ollama">Ollama Local LLM</option>
+                      <option value="groq">Groq</option>
+                      <option value="anthropic">Claude / Anthropic</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="openai_compatible">Other OpenAI-Compatible Vendor</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>Model</label>
+                    <input
+                      value={llmForm.model}
+                      onChange={e => setLlmForm({ ...llmForm, model: e.target.value })}
+                      placeholder="e.g. claude-3-5-sonnet-latest"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="grid" style={{ marginBottom: 16 }}>
+                  <div className="field">
+                    <label>Base URL</label>
+                    <input
+                      value={llmForm.base_url}
+                      onChange={e => setLlmForm({ ...llmForm, base_url: e.target.value })}
+                      placeholder={llmForm.provider === "openai_compatible" ? "https://vendor.example.com/v1" : "Only needed for Ollama or compatible vendors"}
+                    />
+                  </div>
+                  <div className="field">
+                    <label>API Key</label>
+                    <input
+                      type="password"
+                      value={llmForm.api_key}
+                      onChange={e => setLlmForm({ ...llmForm, api_key: e.target.value })}
+                      placeholder={llmConfig?.has_api_key ? "Leave blank to keep existing key" : "Paste provider API key"}
+                    />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading} style={{ minWidth: 180 }}>
+                  {loading ? "Saving..." : "Save LLM Configuration"}
+                </button>
+              </form>
+            </div>
+
+            <div className="panel">
+              <p className="panel-title">Provider Notes</p>
+              <div className="compact-list">
+                <div><strong>Ollama:</strong> private local default, no API key needed.</div>
+                <div><strong>Claude:</strong> requires an Anthropic API key, not a Claude web subscription.</div>
+                <div><strong>OpenAI/Groq:</strong> requires vendor API key and approved business use.</div>
+                <div><strong>Other vendors:</strong> use OpenAI-compatible chat-completions base URL.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Leadership tab ───────────────────────── */}
         {activeTab === "leaderboard" && canViewLeadership && leadershipSummary && (
           <div className="leadership-page">
@@ -1650,7 +1793,7 @@ export default function App() {
             <div style={{ marginBottom: 24 }}>
               <h2 style={{ margin: 0, fontSize: 22 }}>LLM Usage</h2>
               <p className="hint" style={{ marginTop: 6 }}>
-                Token usage and estimated cost across Groq now, with the same model ready for Claude/OpenAI providers later.
+                Token usage and estimated cost across the active provider selected in Admin LLM Configuration.
               </p>
             </div>
 

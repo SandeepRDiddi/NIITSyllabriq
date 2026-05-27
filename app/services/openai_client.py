@@ -1,35 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import httpx
 
 from app.core.config import settings
+from app.services.groq_client import LLMUsage
 
 
-@dataclass
-class LLMUsage:
-    provider: str
-    model: str
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-
-
-class GroqClient:
-    """
-    Drop-in replacement for OllamaClient using the Groq API.
-    Groq runs llama-3.3-70b at ~500 tokens/sec — a 10-module design
-    completes in under 30 seconds vs 3-5 minutes on a local CPU.
-
-    Set LLM_PROVIDER=groq and GROQ_API_KEY in your .env file to activate.
-    """
-
-    BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
-
-    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
-        self.api_key = api_key if api_key is not None else settings.groq_api_key
-        self.model = model or settings.groq_model
+class OpenAIClient:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+        provider: str = "openai",
+    ) -> None:
+        self.api_key = api_key if api_key is not None else settings.openai_api_key
+        self.model = model or settings.openai_model
+        self.base_url = (base_url or "https://api.openai.com/v1").rstrip("/")
+        self.provider = provider
         self.last_usage: LLMUsage | None = None
 
     def is_reachable(self) -> bool:
@@ -40,7 +28,6 @@ class GroqClient:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -52,12 +39,12 @@ class GroqClient:
             "max_tokens": 6000,
         }
         try:
-            response = httpx.post(self.BASE_URL, json=payload, headers=headers, timeout=120.0)
+            response = httpx.post(f"{self.base_url}/chat/completions", json=payload, headers=headers, timeout=120.0)
             response.raise_for_status()
             data = response.json()
             usage = data.get("usage") or {}
             self.last_usage = LLMUsage(
-                provider="groq",
+                provider=self.provider,
                 model=self.model,
                 prompt_tokens=int(usage.get("prompt_tokens") or 0),
                 completion_tokens=int(usage.get("completion_tokens") or 0),

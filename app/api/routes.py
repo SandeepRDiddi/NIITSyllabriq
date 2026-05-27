@@ -18,6 +18,7 @@ from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse, UserCreate, UserRead
 from app.schemas.common import HealthResponse, MessageResponse
 from app.schemas.design import DesignRead, DesignSummaryRead, GenerateDesignRequest, ReferenceRead, ScoreCardRead
+from app.schemas.llm_config import LLMProviderConfigRead, LLMProviderConfigUpdate
 from app.schemas.requirement import RequirementCreateResponse, RequirementRead, RequirementTextCreate
 from app.schemas.review import ReviewSubmitRequest, ReviewTaskRead
 from app.schemas.training import LLMUsageSummaryRead, LeadershipSummaryRead, ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
@@ -26,6 +27,7 @@ from app.services.auth_service import auth_service, get_current_user, require_ro
 from app.services.design_service import DesignService
 from app.services.document_parser import DocumentParser
 from app.services.export_service import ExportService
+from app.services.llm_config_service import llm_config_service
 from app.services.ollama_client import OllamaClient
 from app.services.reporting_service import ReportingService
 from app.services.storage_service import StorageService
@@ -44,19 +46,63 @@ reporting_service = ReportingService()
 
 
 @router.get("/health", response_model=HealthResponse)
-def healthcheck() -> HealthResponse:
+def healthcheck(session: Session = Depends(get_session)) -> HealthResponse:
+    active_llm = llm_config_service.get_active_config(session)
     return HealthResponse(
         status="ok",
         environment=settings.environment,
-        llm_provider=settings.llm_provider,
-        generation_model=(
-            settings.groq_model
-            if settings.llm_provider == "groq"
-            else settings.ollama_generation_model
-        ),
+        llm_provider=active_llm.provider,
+        generation_model=active_llm.model,
         embedding_model=settings.ollama_embed_model,
         ollama_reachable=ollama_client.is_reachable(),
     )
+
+
+def _llm_config_response(config) -> LLMProviderConfigRead:
+    return LLMProviderConfigRead(
+        id=config.id or 0,
+        provider=config.provider,
+        model=config.model,
+        base_url=config.base_url,
+        is_active=config.is_active,
+        has_api_key=bool(config.api_key),
+        updated_by=config.updated_by,
+        updated_at=config.updated_at,
+    )
+
+
+@router.get("/admin/llm-config", response_model=LLMProviderConfigRead)
+def get_llm_config(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles(["admin"])),
+) -> LLMProviderConfigRead:
+    return _llm_config_response(llm_config_service.get_active_config(session))
+
+
+@router.put("/admin/llm-config", response_model=LLMProviderConfigRead)
+def update_llm_config(
+    payload: LLMProviderConfigUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_roles(["admin"])),
+) -> LLMProviderConfigRead:
+    provider = payload.provider.strip().lower()
+    retained_api_key = payload.api_key
+    if provider != "ollama" and not payload.api_key:
+        current = llm_config_service.get_active_config(session)
+        if current.provider != provider or not current.api_key:
+            raise HTTPException(status_code=400, detail=f"{provider} requires an API key")
+        retained_api_key = current.api_key
+    if provider == "openai_compatible" and not payload.base_url.strip():
+        raise HTTPException(status_code=400, detail="OpenAI-compatible providers require a base URL")
+    config = llm_config_service.save_active_config(
+        session=session,
+        provider=provider,
+        model=payload.model,
+        base_url=payload.base_url,
+        api_key=retained_api_key,
+        updated_by=current_user.email,
+    )
+    return _llm_config_response(config)
 
 
 @router.post("/auth/login", response_model=TokenResponse)

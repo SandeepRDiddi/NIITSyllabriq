@@ -8,9 +8,9 @@ from app.core.config import settings
 
 
 class OllamaClient:
-    def __init__(self) -> None:
-        self.base_url = settings.ollama_base_url.rstrip("/")
-        self.generation_model = settings.ollama_generation_model
+    def __init__(self, base_url: str | None = None, generation_model: str | None = None) -> None:
+        self.base_url = (base_url or settings.ollama_base_url).rstrip("/")
+        self.generation_model = generation_model or settings.ollama_generation_model
         self.embedding_model = settings.ollama_embed_model
         self.embedding_timeout = settings.ollama_embed_timeout_seconds
 
