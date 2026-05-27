@@ -171,12 +171,21 @@ function statusBadge(status: string) {
   return <span className={map[status] || "badge badge-default"}>{status.replace(/_/g, " ")}</span>;
 }
 
+function scoreFraction(score: number) {
+  return score > 1 ? score / 100 : score;
+}
+
 function scoreBarClass(score: number) {
-  return score >= 0.78 ? "" : score >= 0.5 ? " mid" : " low";
+  const normalized = scoreFraction(score);
+  return normalized >= 0.78 ? "" : normalized >= 0.5 ? " mid" : " low";
 }
 
 function formatPercent(score: number) {
-  return `${Math.round(score * 100)}%`;
+  return `${Math.round(scoreFraction(score) * 100)}%`;
+}
+
+function percentWidth(score: number) {
+  return `${Math.min(scoreFraction(score) * 100, 100)}%`;
 }
 
 export default function App() {
@@ -1045,7 +1054,7 @@ export default function App() {
                         <td>
                           <div className="row" style={{ gap: 8, alignItems: "center" }}>
                             <div className="score-bar-wrap" style={{ width: 80 }}>
-                              <div className={`score-bar${scoreBarClass(score)}`} style={{ width: `${Math.min(score * 100, 100)}%` }} />
+                              <div className={`score-bar${scoreBarClass(score)}`} style={{ width: percentWidth(score) }} />
                             </div>
                             <span className="hint">{formatPercent(score)}</span>
                           </div>
@@ -1186,7 +1195,7 @@ export default function App() {
                       <div key={label as string} className="score-row">
                         <span>{label}</span>
                         <div className="score-bar-wrap">
-                          <div className={`score-bar${scoreBarClass(value as number)}`} style={{ width: `${Math.min((value as number) * 100, 100)}%` }} />
+                          <div className={`score-bar${scoreBarClass(value as number)}`} style={{ width: percentWidth(value as number) }} />
                         </div>
                         <strong>{formatPercent(value as number)}</strong>
                       </div>
@@ -1478,6 +1487,18 @@ export default function App() {
                 <span className="metric-value">{leadershipSummary.rejected_or_rework_count}</span>
                 <span className="metric-label">Rejected / Rework</span>
               </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary ? usageSummary.total_calls : 0}</span>
+                <span className="metric-label">LLM Calls</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">{usageSummary ? usageSummary.total_tokens.toLocaleString() : "0"}</span>
+                <span className="metric-label">Tokens Used</span>
+              </div>
+              <div className="metric metric-accent">
+                <span className="metric-value">${usageSummary ? usageSummary.estimated_cost.toFixed(4) : "0.0000"}</span>
+                <span className="metric-label">Est. LLM Spend</span>
+              </div>
             </div>
 
             <div className="grid" style={{ marginBottom: 24 }}>
@@ -1529,6 +1550,56 @@ export default function App() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="grid" style={{ marginBottom: 24 }}>
+              <div className="panel">
+                <p className="panel-title">Token Spend Snapshot</p>
+                {!usageSummary || usageSummary.total_calls === 0 ? (
+                  <div className="empty" style={{ padding: "24px 0" }}>
+                    No token usage recorded yet. Generate a new design to populate this view.
+                  </div>
+                ) : (
+                  <div>
+                    {usageSummary.by_user.slice(0, 5).map((row) => {
+                      const maxTokens = Math.max(...usageSummary.by_user.map((item) => item.total_tokens), 1);
+                      const width = Math.max(8, Math.round((row.total_tokens / maxTokens) * 100));
+                      return (
+                        <div key={row.user_email} style={{ marginBottom: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                            <span className="hint">{row.user_email}</span>
+                            <strong>{row.total_tokens.toLocaleString()} tokens</strong>
+                          </div>
+                          <div className="score-bar-wrap" style={{ height: 12 }}>
+                            <div className="score-bar" style={{ width: `${width}%`, height: 12, background: "var(--accent)" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="panel">
+                <p className="panel-title">LLM Cost Overview</p>
+                <div className="grid-3">
+                  <div className="metric metric-accent">
+                    <span className="metric-value">{usageSummary ? usageSummary.prompt_tokens.toLocaleString() : "0"}</span>
+                    <span className="metric-label">Input Tokens</span>
+                  </div>
+                  <div className="metric metric-accent">
+                    <span className="metric-value">{usageSummary ? usageSummary.completion_tokens.toLocaleString() : "0"}</span>
+                    <span className="metric-label">Output Tokens</span>
+                  </div>
+                  <div className="metric metric-accent">
+                    <span className="metric-value">{usageSummary ? usageSummary.by_user.length : 0}</span>
+                    <span className="metric-label">Users</span>
+                  </div>
+                </div>
+                <p className="hint" style={{ marginTop: 16 }}>
+                  Spend is estimated from captured provider token metadata. Claude/OpenAI enterprise providers can feed the same dashboard once connected.
+                </p>
               </div>
             </div>
 
@@ -1686,7 +1757,7 @@ export default function App() {
                 <span className="metric-label">Primary Pending</span>
               </div>
               <div className="metric metric-accent">
-                <span className="metric-value">{(reportSummary.average_design_score * 100).toFixed(0)}%</span>
+                <span className="metric-value">{formatPercent(reportSummary.average_design_score)}</span>
                 <span className="metric-label">Avg Design Score</span>
               </div>
             </div>
