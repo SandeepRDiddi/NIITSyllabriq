@@ -1,8 +1,5 @@
 # Syllabriq — Product Note
 
-**Classification:** Client-Facing | Portfolio Presentation | Leadership Briefing
-**Version:** 1.0 | **Status:** Ready for Deployment | **Date:** June 2026
-
 ---
 
 ## Executive Summary
@@ -238,14 +235,9 @@ The platform is designed to move through these stages progressively as adoption 
 | LLM Usage & Cost Tracking | Complete |
 | Audit Trail & Event Logging | Complete |
 | Testing (Unit + Integration) | Complete |
-| Deployment Documentation | Complete |
-| **Production Deployment** | **Ready** |
+| Deployment Documentation | Inprogress |
+| **Production Deployment** | Inprogress  |
 
 ---
 
-*Syllabriq — Designed, Built, and Ready.*
-*For deployment enquiries, access provisioning, or a live demonstration, contact the project team.*
 
----
-
-*This Product Note was authored based on a complete review of the Syllabriq codebase, architecture, and feature set. It reflects the actual delivered system as of June 2026.*
