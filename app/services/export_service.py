@@ -178,8 +178,8 @@ class ExportService:
                 i += 1
                 continue
 
-            # ── Skip Total Duration (shown on cover, not in body) ────────────
-            if "Total Duration" in line:
+            # ── Skip Total Duration cover-metadata line (already on cover page) ──
+            if re.match(r"^﻿?\s*(?:\*\*)?Total Duration(?:\*\*)?\s*:", line.strip()):
                 i += 1
                 continue
 

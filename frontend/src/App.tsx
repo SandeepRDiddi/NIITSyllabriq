@@ -997,10 +997,17 @@ export default function App() {
                       Answer as many of these as you know. They ground the generated design in unambiguous facts —
                       anything not covered here can still go in Requirement Details below.
                     </p>
-                    <DiscoveryQuestionnaire
-                      value={reqForm.discovery}
-                      onChange={(next: DiscoveryAnswers) => setReqForm({ ...reqForm, discovery: next })}
-                    />
+                    {reqForm.file ? (
+                      <p className="hint" style={{ margin: 0 }}>
+                        Discovery questionnaire answers are saved only for direct-text requirements.
+                        Remove the file upload to include these answers.
+                      </p>
+                    ) : (
+                      <DiscoveryQuestionnaire
+                        value={reqForm.discovery}
+                        onChange={(next: DiscoveryAnswers) => setReqForm((prev) => ({ ...prev, discovery: next }))}
+                      />
+                    )}
                   </div>
 
                   <div className="field" style={{ marginBottom: 16 }}>

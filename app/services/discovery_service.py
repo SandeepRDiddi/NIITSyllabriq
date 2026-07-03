@@ -63,7 +63,10 @@ def build_discovery_facts_block(discovery: dict[str, object] | None) -> str:
     for field, label in FIELD_LABELS.items():
         formatted = _format_value(discovery.get(field))
         if formatted:
-            lines.append(f"- {label}: {formatted}")
+            # Strip newlines and backtick fences so a crafted answer cannot
+            # inject new prompt instructions or close the facts block early.
+            safe = formatted.replace("\r", " ").replace("\n", " ").replace("```", "` ` `").strip()
+            lines.append(f"- {label}: {safe}")
 
     if not lines:
         return ""
