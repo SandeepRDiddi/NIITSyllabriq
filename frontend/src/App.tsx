@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import "./styles.css";
+import DiscoveryQuestionnaire, { DiscoveryAnswers, EMPTY_DISCOVERY_ANSWERS } from "./DiscoveryQuestionnaire";
 
 type User = {
   id: number;
@@ -220,6 +221,7 @@ export default function App() {
     source: "email",
     rawText: "",
     file: null as File | null,
+    discovery: EMPTY_DISCOVERY_ANSWERS,
   });
   const [trainingForm, setTrainingForm] = useState({ title: "", file: null as File | null });
   const [selectedDesign, setSelectedDesign] = useState<DesignDetail | null>(null);
@@ -363,6 +365,10 @@ export default function App() {
           title: reqForm.title.trim(),
           raw_text: reqForm.rawText.trim(),
           source: reqForm.source,
+          discovery: {
+            ...reqForm.discovery,
+            learner_count: reqForm.discovery.learner_count ? parseInt(reqForm.discovery.learner_count, 10) : null,
+          },
         };
         if (reqForm.totalDurationHours) {
           body.total_duration_hours = parseInt(reqForm.totalDurationHours, 10);
@@ -375,7 +381,7 @@ export default function App() {
       }
       notify("Requirement saved successfully.");
       const savedTitle = reqForm.title.trim();
-      setReqForm({ customerName: "", title: "", totalDurationHours: "", source: "email", rawText: "", file: null });
+      setReqForm({ customerName: "", title: "", totalDurationHours: "", source: "email", rawText: "", file: null, discovery: EMPTY_DISCOVERY_ANSWERS });
       await refreshDashboard();
       if (andGenerate) {
         // Open reviewer picker for the just-created requirement
@@ -562,7 +568,6 @@ export default function App() {
     return (
       <div className="login-shell">
         <div className="login-card">
-          <div className="login-logo">NIIT</div>
           <h1>Design Automation</h1>
           <p>Enterprise design generation, review &amp; export workflow.</p>
           {message && <div className={`alert alert-${message.type}`}>{message.text}</div>}
@@ -634,7 +639,6 @@ export default function App() {
       {/* Topbar */}
       <header className="topbar">
         <div className="topbar-brand">
-          <span className="topbar-logo">NIIT</span>
           <h1>Design Automation</h1>
         </div>
         <div className="topbar-user">
@@ -982,6 +986,28 @@ export default function App() {
                         <option value="other">Other</option>
                       </select>
                     </div>
+                  </div>
+
+                  {/* Discovery Questionnaire — structured companion to the free-text requirement below */}
+                  <div style={{ marginBottom: 20, padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)" }}>
+                    <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 14, color: "var(--text)" }}>
+                      Discovery Questionnaire <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
+                    </p>
+                    <p className="hint" style={{ marginTop: 0, marginBottom: 14 }}>
+                      Answer as many of these as you know. They ground the generated design in unambiguous facts —
+                      anything not covered here can still go in Requirement Details below.
+                    </p>
+                    {reqForm.file ? (
+                      <p className="hint" style={{ margin: 0 }}>
+                        Discovery questionnaire answers are saved only for direct-text requirements.
+                        Remove the file upload to include these answers.
+                      </p>
+                    ) : (
+                      <DiscoveryQuestionnaire
+                        value={reqForm.discovery}
+                        onChange={(next: DiscoveryAnswers) => setReqForm((prev) => ({ ...prev, discovery: next }))}
+                      />
+                    )}
                   </div>
 
                   <div className="field" style={{ marginBottom: 16 }}>
