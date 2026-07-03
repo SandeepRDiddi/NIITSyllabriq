@@ -247,13 +247,26 @@ def create_requirement_from_text(
     source_filename = f"{source_label}_{timestamp}.txt"
     saved_path = storage_service.save_requirement(source_filename, enriched_text.encode("utf-8"))
 
+    # Merge structured Discovery Questionnaire answers into the same
+    # normalized requirement context the narrative text produces — the
+    # designer's free text and the questionnaire are treated as one
+    # combined source of truth for prompt construction and traceability.
+    normalized_requirement = document_parser.normalize_requirement(enriched_text)
+    discovery_answers = (
+        {key: value for key, value in payload.discovery.model_dump(exclude_none=True).items() if value}
+        if payload.discovery
+        else {}
+    )
+    if discovery_answers:
+        normalized_requirement["discovery"] = discovery_answers
+
     requirement = Requirement(
         customer_name=payload.customer_name,
         title=payload.title,
         source_filename=source_filename,
         source_path=str(saved_path),
         raw_text=enriched_text,
-        normalized_json=document_parser.normalize_to_json(enriched_text),
+        normalized_json=json.dumps(normalized_requirement, indent=2, ensure_ascii=True),
         created_by=current_user.email,
     )
     session.add(requirement)
@@ -273,6 +286,7 @@ def create_requirement_from_text(
             "source": payload.source,
             "total_duration_hours": payload.total_duration_hours,
             "char_count": len(enriched_text),
+            "discovery_fields_answered": list(discovery_answers.keys()),
         },
     )
     return RequirementCreateResponse(

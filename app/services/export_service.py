@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from datetime import date
@@ -40,21 +40,6 @@ _LEARNING_PEDAGOGY_TEXT = (
     "2. Reference learning material."
 )
 
-_ABOUT_STACKROUTE_TEXT = (
-    "Established in August 2015, StackRoute\u00ae is an NIIT incubated venture. StackRoute provides "
-    "disruptive IT Learning solutions that produce top-class full-stack developers & tech professionals "
-    "with deep skills. We have evolved a mechanism of providing immersive experiences backed by mastery "
-    "learning and individual tutoring that allows us to guarantee outcomes. As a digital transformation "
-    "partner, StackRoute works with several large, mid & small global IT organizations, Global Incubation "
-    "Centers (GICs), Global Capability Centers (GCCs) & product engineering teams."
-)
-
-_IP_NOTICE = (
-    "All Information within this document is Intellectual property of NIIT (NIIT Ltd). "
-    "No part of this document or the program design or program structure mentioned within "
-    "can be shared or used within any organization without the permission of NIIT (NIIT Ltd)."
-)
-
 # Sections that carry fixed boilerplate — skip them in the markdown body pass
 _FIXED_SECTIONS = {"learning pedagogy", "about stackroute"}
 
@@ -82,6 +67,12 @@ def _set_font(run, size_pt: float, bold: bool = False, italic: bool = False, col
 
 class ExportService:
 
+    @staticmethod
+    def _is_separator_row(row: str) -> bool:
+        """True if every non-empty cell contains only dashes and colons (GFM separator)."""
+        cells = [c.strip() for c in row.strip("|").split("|") if c.strip()]
+        return bool(cells) and all(re.match(r"^-+:?$|^:-+:?$|^:?-+$", c) for c in cells)
+
     def export_docx(self, title: str, content: str, stem: str) -> str:
         target = Path(settings.export_dir) / f"{stem}.docx"
         doc = Document()
@@ -94,7 +85,7 @@ class ExportService:
             section.right_margin  = Inches(1.0)
 
         # ── Cover page ────────────────────────────────────────────────────────
-        self._add_cover(doc, content)
+        self._add_cover(doc, title, content)
 
         doc.add_paragraph("")
 
@@ -105,13 +96,10 @@ class ExportService:
         # These are appended last because they are template-mandated and
         # must appear verbatim regardless of what the LLM generated.
         self._add_fixed_section(doc, "Learning Pedagogy", _LEARNING_PEDAGOGY_TEXT, size_pt=14)
-        self._add_fixed_section(doc, "About StackRoute", _ABOUT_STACKROUTE_TEXT, size_pt=14, italic_body=True)
 
         # Note: sign-off status is tracked in the database (DesignDocument.status).
         # No approval table is printed in the document itself.
 
-        # ── Footer notice (inline at end of doc) ───────────────────────────────
-        self._add_footer_notice(doc)
 
         doc.save(target)
         return str(target)
@@ -120,36 +108,15 @@ class ExportService:
     # Cover page
     # ------------------------------------------------------------------
 
-    def _add_cover(self, doc: Document, content: str) -> None:
-        """
-        Build the cover block.
-        Extracts program_name and total_duration from the markdown content,
-        matching the official NIIT StackRoute cover layout.
-        """
-        # Extract course title: "# Course: <name>" or "Course: <name>"
-        program_name = self._extract_cover_field(content, r"#\s*Course:\s*(.+)")
-        if not program_name:
-            program_name = self._extract_cover_field(content, r"Course:\s*(.+)")
-        if not program_name:
-            program_name = "[Program Name]"
+    def _add_cover(self, doc: Document, title: str, content: str) -> None:
+        program_name = title or "[Program Name]"
 
         # Extract total duration
         duration = self._extract_cover_field(content, r"\*\*Total Duration:\*\*\s*(.+)")
         if not duration:
             duration = self._extract_cover_field(content, r"Total Duration:\s*(.+)")
 
-        # NIIT StackRoute wordmark
-        brand_para = doc.add_paragraph()
-        brand_run = brand_para.add_run("NIIT StackRoute®")
-        _set_font(brand_run, 16, bold=True, color=SR_NAVY)
-        brand_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
-        doc.add_paragraph("")
-
-        # "Course: <Program Name>" — 28pt bold orange (exact template spec)
         title_para = doc.add_paragraph()
-        label_run = title_para.add_run("Course: ")
-        _set_font(label_run, 28, bold=True, color=SR_ORANGE)
         name_run = title_para.add_run(program_name)
         _set_font(name_run, 28, bold=True, color=SR_ORANGE)
         title_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -165,11 +132,10 @@ class ExportService:
         doc.add_paragraph("")
 
         # Metadata strip
-        meta = doc.add_table(rows=3, cols=2)
+        meta = doc.add_table(rows=2, cols=2)
         meta.style = "Table Grid"
         meta_rows = [
             ("Document Type",  "Program Design Document"),
-            ("Prepared by",    "NIIT StackRoute — Design Automation"),
             ("Date",           date.today().strftime("%d %B %Y")),
         ]
         for i, (lbl, val) in enumerate(meta_rows):
@@ -202,28 +168,18 @@ class ExportService:
         i = 0
         in_fixed_section = False
         skip_approval = False
-        yaml_consumed = False  # Only strip the front-matter block once
 
         while i < len(lines):
             line = lines[i]
 
-            # ── Skip YAML front-matter (first ---...--- block only) ───────────
-            if line.strip() == "---" and not yaml_consumed:
-                i += 1
-                while i < len(lines) and lines[i].strip() != "---":
-                    i += 1
-                i += 1          # skip closing ---
-                yaml_consumed = True
-                continue
-
-            # ── All subsequent --- are horizontal rules — render as whitespace ─
+            # ── Horizontal rules — render as whitespace ───────────────────────
             if line.strip() == "---":
                 doc.add_paragraph("")
                 i += 1
                 continue
 
-            # ── Skip cover-level H1 and Total Duration ────────────────────────
-            if line.startswith("# ") or re.match(r"\*\*Total Duration", line):
+            # ── Skip Total Duration (shown on cover, not in body) ────────────
+            if "Total Duration" in line:
                 i += 1
                 continue
 
@@ -277,9 +233,9 @@ class ExportService:
             if line.lstrip().startswith("|"):
                 table_lines: list[str] = []
                 while i < len(lines) and lines[i].lstrip().startswith("|"):
-                    table_lines.append(lines[i].strip())  # normalise leading/trailing whitespace
+                    table_lines.append(lines[i].strip())
                     i += 1
-                rows = [r for r in table_lines if not re.match(r"^\|[-| :]+\|$", r.strip())]
+                rows = [r for r in table_lines if not self._is_separator_row(r)]
                 if rows:
                     cols = [c.strip() for c in rows[0].strip("|").split("|")]
                     tbl = doc.add_table(rows=len(rows), cols=len(cols))
