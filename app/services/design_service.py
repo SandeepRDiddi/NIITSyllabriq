@@ -27,10 +27,16 @@ from app.services.groq_client import GroqClient
 from app.services.llm_config_service import llm_config_service
 from app.services.ollama_client import OllamaClient
 from app.services.openai_client import OpenAIClient
+from app.schemas.requirement import DISCOVERY_QUESTION_LABELS, DiscoveryAnswers
 from app.services.scoring_service import ScoringService
 from app.services.similarity_service import SimilarityService
 from app.services.storage_service import StorageService
 from app.services.text_utils import as_pretty_json, dedupe_keep_order
+
+
+class NotQualifiedForDesignError(ValueError):
+    """Raised when a requirement's Discovery Questionnaire is incomplete, so it cannot open a design."""
+
 
 # ---------------------------------------------------------------------------
 # System prompt injected into every Ollama call — encodes the full StackRoute
@@ -159,6 +165,19 @@ class DesignService:
             raise ValueError("Requirement not found")
 
         normalized_requirement = json.loads(requirement.normalized_json)
+
+        discovery_data = normalized_requirement.get("discovery")
+        missing = (
+            DiscoveryAnswers(**discovery_data).missing_questions()
+            if discovery_data
+            else list(DISCOVERY_QUESTION_LABELS.values())
+        )
+        if missing:
+            raise NotQualifiedForDesignError(
+                "This requirement is not qualified for design — the Discovery Questionnaire is incomplete. "
+                f"Missing: {', '.join(missing)}"
+            )
+
         matches = [
             match
             for match in self.similarity_service.find_matches(session, requirement.raw_text)

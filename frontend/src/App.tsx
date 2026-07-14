@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import "./styles.css";
-import DiscoveryQuestionnaire, { DiscoveryAnswers, EMPTY_DISCOVERY_ANSWERS } from "./DiscoveryQuestionnaire";
+import DiscoveryQuestionnaire, { DiscoveryAnswers, EMPTY_DISCOVERY_ANSWERS, missingDiscoveryQuestions } from "./DiscoveryQuestionnaire";
 
 type User = {
   id: number;
@@ -349,12 +349,25 @@ export default function App() {
       notify("Paste requirement text or upload a requirement file.", "error");
       return;
     }
+    const missing = missingDiscoveryQuestions(reqForm.discovery);
+    if (missing.length > 0) {
+      notify(
+        `This requirement is not qualified for design — please complete the Discovery Questionnaire. Missing: ${missing.join(", ")}`,
+        "error",
+      );
+      return;
+    }
     setLoading(true);
     try {
       let created: { id: number };
+      const discoveryPayload = {
+        ...reqForm.discovery,
+        learner_count: reqForm.discovery.learner_count ? parseInt(reqForm.discovery.learner_count, 10) : null,
+      };
       if (reqForm.file) {
         const fd = new FormData();
         fd.append("file", reqForm.file);
+        fd.append("discovery", JSON.stringify(discoveryPayload));
         created = await api<{ id: number }>(
           `/requirements/upload?customer_name=${encodeURIComponent(reqForm.customerName.trim())}&title=${encodeURIComponent(reqForm.title.trim())}`,
           { method: "POST", body: fd },
@@ -365,10 +378,7 @@ export default function App() {
           title: reqForm.title.trim(),
           raw_text: reqForm.rawText.trim(),
           source: reqForm.source,
-          discovery: {
-            ...reqForm.discovery,
-            learner_count: reqForm.discovery.learner_count ? parseInt(reqForm.discovery.learner_count, 10) : null,
-          },
+          discovery: discoveryPayload,
         };
         if (reqForm.totalDurationHours) {
           body.total_duration_hours = parseInt(reqForm.totalDurationHours, 10);
@@ -988,26 +998,20 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Discovery Questionnaire — structured companion to the free-text requirement below */}
+                  {/* Discovery Questionnaire — mandatory gate before a requirement qualifies for design generation */}
                   <div style={{ marginBottom: 20, padding: 16, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)" }}>
                     <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 14, color: "var(--text)" }}>
-                      Discovery Questionnaire <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
+                      Discovery Questionnaire <span style={{ fontWeight: 400, color: "var(--red)" }}>(required)</span>
                     </p>
                     <p className="hint" style={{ marginTop: 0, marginBottom: 14 }}>
-                      Answer as many of these as you know. They ground the generated design in unambiguous facts —
-                      anything not covered here can still go in Requirement Details below.
+                      Every question below must be answered. A requirement is not qualified for design generation
+                      until this questionnaire is complete — anything not covered here can still go in Requirement
+                      Details below.
                     </p>
-                    {reqForm.file ? (
-                      <p className="hint" style={{ margin: 0 }}>
-                        Discovery questionnaire answers are saved only for direct-text requirements.
-                        Remove the file upload to include these answers.
-                      </p>
-                    ) : (
-                      <DiscoveryQuestionnaire
-                        value={reqForm.discovery}
-                        onChange={(next: DiscoveryAnswers) => setReqForm((prev) => ({ ...prev, discovery: next }))}
-                      />
-                    )}
+                    <DiscoveryQuestionnaire
+                      value={reqForm.discovery}
+                      onChange={(next: DiscoveryAnswers) => setReqForm((prev) => ({ ...prev, discovery: next }))}
+                    />
                   </div>
 
                   <div className="field" style={{ marginBottom: 16 }}>

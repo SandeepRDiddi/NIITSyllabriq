@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
@@ -19,12 +19,18 @@ from app.schemas.auth import LoginRequest, TokenResponse, UserCreate, UserRead
 from app.schemas.common import HealthResponse, MessageResponse
 from app.schemas.design import DesignRead, DesignSummaryRead, GenerateDesignRequest, ReferenceRead, ScoreCardRead
 from app.schemas.llm_config import LLMProviderConfigRead, LLMProviderConfigUpdate
-from app.schemas.requirement import RequirementCreateResponse, RequirementRead, RequirementTextCreate
+from app.schemas.requirement import (
+    DISCOVERY_QUESTION_LABELS,
+    DiscoveryAnswers,
+    RequirementCreateResponse,
+    RequirementRead,
+    RequirementTextCreate,
+)
 from app.schemas.review import ReviewSubmitRequest, ReviewTaskRead
 from app.schemas.training import LLMUsageSummaryRead, LeadershipSummaryRead, ReportingSummaryRead, TrainingDocumentRead, WorkflowEventRead
 from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service, get_current_user, require_roles
-from app.services.design_service import DesignService
+from app.services.design_service import DesignService, NotQualifiedForDesignError
 from app.services.document_parser import DocumentParser
 from app.services.export_service import ExportService
 from app.services.llm_config_service import llm_config_service
@@ -167,10 +173,22 @@ def create_user(
 async def upload_requirement(
     customer_name: str = Query(...),
     title: str = Query(...),
+    discovery: str = Form(...),
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_roles(["admin", "designer"])),
 ) -> RequirementCreateResponse:
+    try:
+        discovery_answers = DiscoveryAnswers.model_validate_json(discovery)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Invalid Discovery Questionnaire payload") from exc
+    missing = discovery_answers.missing_questions()
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"This requirement is not qualified for design — the Discovery Questionnaire is incomplete. Missing: {', '.join(missing)}",
+        )
+
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
@@ -181,13 +199,16 @@ async def upload_requirement(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    normalized_requirement = document_parser.normalize_requirement(raw_text)
+    normalized_requirement["discovery"] = discovery_answers.model_dump()
+
     requirement = Requirement(
         customer_name=customer_name,
         title=title,
         source_filename=file.filename,
         source_path=str(saved_path),
         raw_text=raw_text,
-        normalized_json=document_parser.normalize_to_json(raw_text),
+        normalized_json=json.dumps(normalized_requirement, indent=2, ensure_ascii=True),
         created_by=current_user.email,
     )
     session.add(requirement)
@@ -232,6 +253,13 @@ def create_requirement_from_text(
     if not payload.raw_text.strip():
         raise HTTPException(status_code=400, detail="Requirement text cannot be empty")
 
+    missing = payload.discovery.missing_questions() if payload.discovery else list(DISCOVERY_QUESTION_LABELS.values())
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"This requirement is not qualified for design — the Discovery Questionnaire is incomplete. Missing: {', '.join(missing)}",
+        )
+
     # Prepend the duration hint so the design generator can reliably extract it
     enriched_text = payload.raw_text.strip()
     if payload.total_duration_hours:
@@ -252,13 +280,8 @@ def create_requirement_from_text(
     # designer's free text and the questionnaire are treated as one
     # combined source of truth for prompt construction and traceability.
     normalized_requirement = document_parser.normalize_requirement(enriched_text)
-    discovery_answers = (
-        {key: value for key, value in payload.discovery.model_dump(exclude_none=True).items() if value}
-        if payload.discovery
-        else {}
-    )
-    if discovery_answers:
-        normalized_requirement["discovery"] = discovery_answers
+    discovery_answers = payload.discovery.model_dump()
+    normalized_requirement["discovery"] = discovery_answers
 
     requirement = Requirement(
         customer_name=payload.customer_name,
@@ -413,6 +436,8 @@ def generate_design(
             payload.requested_by or current_user.email,
             primary_reviewers=payload.primary_reviewer_emails or None,
         )
+    except NotQualifiedForDesignError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _build_design_response(session, design)
