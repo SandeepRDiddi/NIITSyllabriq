@@ -1,0 +1,202 @@
+<mxfile host="app.diagrams.net" agent="claude-code">
+  <diagram name="Discovery Questionnaire - UI + Backend Flow" id="discovery-flow-1">
+    <mxGraphModel dx="673" dy="432" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="2900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="lane_ui" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;horizontal=1;" value="FRONTEND (UI)" vertex="1">
+          <mxGeometry height="2800" width="700" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ui1" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Requirements Tab (Dashboard)&#xa;Purpose: entry point for requirements&#xa;Actions: view list, click &#39;New Requirement&#39;&#xa;Buttons: [New Requirement]" vertex="1">
+          <mxGeometry height="90" width="560" x="60" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ui2" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Discovery Questionnaire Screen&#xa;Purpose: capture 11 structured answers&#xa;Forms: dropdowns (delivery model, experience level),&#xa;multi-select (audience roles), numeric (learner count),&#xa;short text (trigger, outcomes, constraints)&#xa;Navigation: [Next] / [Back]" vertex="1">
+          <mxGeometry height="110" width="560" x="60" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="ui3" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Narrative &amp; Upload Screen&#xa;Purpose: free-text context / file upload&#xa;Actions: type notes, upload .txt/.md/.pdf/.docx&#xa;Buttons: [Save Requirement] [Save &amp; Generate Design] [Back]" vertex="1">
+          <mxGeometry height="100" width="560" x="60" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="ui4" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="User clicks Save" vertex="1">
+          <mxGeometry height="50" width="240" x="60" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_err" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="Show Validation Error&#xa;(back to form)" vertex="1">
+          <mxGeometry height="60" width="240" x="380" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="ui5" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Requirements List (Updated)&#xa;Purpose: confirms requirement saved" vertex="1">
+          <mxGeometry height="70" width="560" x="60" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_dec" parent="lane_ui" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="Save Requirement&#xa;or&#xa;Save &amp; Generate Design?" vertex="1">
+          <mxGeometry height="90" width="280" x="200" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_end1" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" value="End — Requirement Saved" vertex="1">
+          <mxGeometry height="50" width="240" x="60" y="1150" as="geometry" />
+        </mxCell>
+        <mxCell id="ui6" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Reviewer Selection Modal&#xa;Purpose: choose primary reviewer(s)&#xa;Buttons: [Confirm] [Cancel]" vertex="1">
+          <mxGeometry height="80" width="300" x="320" y="1150" as="geometry" />
+        </mxCell>
+        <mxCell id="ui7" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Design Generation In Progress&#xa;(loading state)" vertex="1">
+          <mxGeometry height="60" width="300" x="320" y="1270" as="geometry" />
+        </mxCell>
+        <mxCell id="ui8" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Designs Tab — Draft View&lt;br&gt;Purpose: shows generated design + scorecard&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="100" width="300" x="320" y="2450" as="geometry" />
+        </mxCell>
+        <mxCell id="ui9" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Review Workflow Screens&#xa;(unchanged)" vertex="1">
+          <mxGeometry height="60" width="300" x="320" y="2580" as="geometry" />
+        </mxCell>
+        <mxCell id="ui10" parent="lane_ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;" value="Final Design / Export Screen&#xa;(unchanged)" vertex="1">
+          <mxGeometry height="60" width="300" x="320" y="2670" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_end2" parent="lane_ui" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" value="End" vertex="1">
+          <mxGeometry height="40" width="100" x="420" y="2760" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui1_2" edge="1" parent="lane_ui" source="ui1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui2_3" edge="1" parent="lane_ui" source="ui2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui3_4" edge="1" parent="lane_ui" source="ui3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui5_dec" edge="1" parent="lane_ui" source="ui5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui_dec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dec_end1" edge="1" parent="lane_ui" source="ui_dec" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" target="ui_end1" value="Save Requirement only">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dec_ui6" edge="1" parent="lane_ui" source="ui_dec" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" target="ui6" value="Save &amp; Generate Design">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui6_7" edge="1" parent="lane_ui" source="ui6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui8_9" edge="1" parent="lane_ui" source="ui8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui9_10" edge="1" parent="lane_ui" source="ui9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ui10_end" edge="1" parent="lane_ui" source="ui10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="ui_end2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_be" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1;horizontal=1;" value="BACKEND" vertex="1">
+          <mxGeometry height="2800" width="800" x="800" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="be1" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="POST /requirements/text&#xa;(rawText, discovery object, metadata)" vertex="1">
+          <mxGeometry height="60" width="600" x="60" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="be2" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Request Schema Validation" vertex="1">
+          <mxGeometry height="70" width="600" x="60" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="be_dec" parent="lane_be" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="Valid?" vertex="1">
+          <mxGeometry height="60" width="120" x="300" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="be_422" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="422 Response" vertex="1">
+          <mxGeometry height="50" width="160" x="60" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="be3" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Normalization Layer&#xa;(merges discovery answers +&#xa;narrative text → normalized_json)" vertex="1">
+          <mxGeometry height="70" width="600" x="60" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="be4" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;verticalAlign=middle;fontSize=11;" value="Database Write&#xa;(Requirement record —&#xa;SQLModel / SQLite / PostgreSQL)" vertex="1">
+          <mxGeometry height="60" width="600" x="60" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="be5" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="RequirementCreateResponse" vertex="1">
+          <mxGeometry height="50" width="280" x="150" y="980" as="geometry" />
+        </mxCell>
+        <mxCell id="be6" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="POST /designs/generate/{requirement_id}" vertex="1">
+          <mxGeometry height="50" width="540" x="120" y="1330" as="geometry" />
+        </mxCell>
+        <mxCell id="be7" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Similarity Service&#xa;(queries DB for prior designs/&#xa;training docs, scores matches)" vertex="1">
+          <mxGeometry height="70" width="540" x="120" y="1410" as="geometry" />
+        </mxCell>
+        <mxCell id="be8" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=middle;fontSize=11;" value="Prompt Construction&lt;br&gt;• System Prompt (unchanged; discovery noted&lt;br&gt;  as authoritative)&lt;br&gt;• User Prompt: Narrative requirement text +&lt;br&gt;  Structured Discovery Facts block" vertex="1">
+          <mxGeometry height="110" width="540" x="120" y="1510" as="geometry" />
+        </mxCell>
+        <mxCell id="be9" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;" value="LLM Request&#xa;(single call — LLM.generate())" vertex="1">
+          <mxGeometry height="60" width="540" x="120" y="1650" as="geometry" />
+        </mxCell>
+        <mxCell id="be10" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Response Validation &amp; Parsing&#xa;(strip fences, locate JSON,&#xa;validate required keys)" vertex="1">
+          <mxGeometry height="70" width="540" x="120" y="1740" as="geometry" />
+        </mxCell>
+        <mxCell id="be11" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Template Rendering&#xa;(niit_template.md — Jinja2, unchanged)" vertex="1">
+          <mxGeometry height="60" width="540" x="120" y="1840" as="geometry" />
+        </mxCell>
+        <mxCell id="be12" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;verticalAlign=middle;fontSize=11;" value="Database Updates&#xa;• DesignDocument (draft_content,&#xa;  status = UNDER_PRIMARY_REVIEW)&#xa;• RetrievedReference (if matched)&#xa;• ScoreCard (unchanged)&#xa;• Traceability Map (now includes&#xa;  discovery → section mappings)" vertex="1">
+          <mxGeometry height="130" width="540" x="120" y="1930" as="geometry" />
+        </mxCell>
+        <mxCell id="be13" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="ReviewTask Records Created&#xa;(assigned reviewers)" vertex="1">
+          <mxGeometry height="60" width="540" x="120" y="2090" as="geometry" />
+        </mxCell>
+        <mxCell id="be14" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="Audit Log Entry Written" vertex="1">
+          <mxGeometry height="50" width="540" x="120" y="2180" as="geometry" />
+        </mxCell>
+        <mxCell id="be15" parent="lane_be" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=center;verticalAlign=middle;fontSize=11;" value="DesignRead response" vertex="1">
+          <mxGeometry height="50" width="540" x="120" y="2260" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be1_2" edge="1" parent="lane_be" source="be1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be2_dec" edge="1" parent="lane_be" source="be2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be_dec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dec_422" edge="1" parent="lane_be" source="be_dec" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" target="be_422" value="Invalid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dec_be3" edge="1" parent="lane_be" source="be_dec" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" target="be3" value="Valid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be3_4" edge="1" parent="lane_be" source="be3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be4_5" edge="1" parent="lane_be" source="be4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be6_7" edge="1" parent="lane_be" source="be6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be7_8" edge="1" parent="lane_be" source="be7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be8_9" edge="1" parent="lane_be" source="be8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be9_10" edge="1" parent="lane_be" source="be9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be10_11" edge="1" parent="lane_be" source="be10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be11_12" edge="1" parent="lane_be" source="be11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be12_13" edge="1" parent="lane_be" source="be12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be13_14" edge="1" parent="lane_be" source="be13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_be14_15" edge="1" parent="lane_be" source="be14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="be15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cross1" edge="1" parent="1" source="ui4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;fontColor=#b85450;fontStyle=1;" target="be1" value="Save">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cross2" edge="1" parent="1" source="be_422" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;fontColor=#b85450;dashed=1;" target="ui_err" value="422">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cross3" edge="1" parent="1" source="be5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;fontColor=#b85450;" target="ui5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cross4" edge="1" parent="1" source="ui7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;fontColor=#b85450;fontStyle=1;" target="be6" value="Confirm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cross5" edge="1" parent="1" source="be15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;fontColor=#b85450;" target="ui8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;align=left;verticalAlign=top;fontSize=10;spacing=8;" value="&lt;br&gt;Blue border = Frontend screen/action&lt;br&gt;Green border = Backend processing step&lt;br&gt;Purple fill = Database operation&lt;br&gt;Orange fill = Prompt construction&lt;br&gt;Blue fill = LLM call&lt;br&gt;Red arrows = cross-lane (API request/response)" vertex="1">
+          <mxGeometry height="120" width="360" x="1230" y="2980" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

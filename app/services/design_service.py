@@ -15,14 +15,28 @@ from app.models.review import ReviewTask
 from app.models.training import LLMUsageEvent
 from app.services.anthropic_client import AnthropicClient
 from app.services.audit_service import audit_service
+from app.services.discovery_service import (
+    build_delivery_clause,
+    build_discovery_facts_block,
+    build_discovery_traceability,
+    build_intro_clause,
+    build_outcome_items,
+    build_prerequisite_items,
+)
 from app.services.groq_client import GroqClient
 from app.services.llm_config_service import llm_config_service
 from app.services.ollama_client import OllamaClient
 from app.services.openai_client import OpenAIClient
+from app.schemas.requirement import DISCOVERY_QUESTION_LABELS, DiscoveryAnswers
 from app.services.scoring_service import ScoringService
 from app.services.similarity_service import SimilarityService
 from app.services.storage_service import StorageService
 from app.services.text_utils import as_pretty_json, dedupe_keep_order
+
+
+class NotQualifiedForDesignError(ValueError):
+    """Raised when a requirement's Discovery Questionnaire is incomplete, so it cannot open a design."""
+
 
 # ---------------------------------------------------------------------------
 # System prompt injected into every Ollama call — encodes the full StackRoute
@@ -48,7 +62,8 @@ Return a JSON object with EXACTLY these keys:
 }
 
 ====== INDICATIVE_DESIGN FORMAT ======
-One short paragraph followed by a 3-column table: # | Module | Duration (Hours)
+One short paragraph followed by a 3-column table with headers: S.No | Module | Duration (Hours)
+S.No values must be sequential integers starting from 1.
 All durations must sum to total_duration_hours.
 
 ====== DETAILED_DESIGN FORMAT AND EXAMPLE ======
@@ -70,6 +85,22 @@ Study this example carefully — your output must match this level of detail:
 | 3. Agentic AI: Concepts, Architecture, and Design | What makes a system agentic versus generative; agent roles, tasks, memory types, tools, and orchestration patterns; deterministic steps versus AI-driven reasoning; planner, analyst, reviewer, and approver agent patterns; event-driven workflows; human approval checkpoints; exception-based operations; reliability and fallback design for enterprise deployment. | 3 | Participants decompose a business scenario into agent roles, tool calls, decision checkpoints, and human handoffs using a structured agent design canvas. | Agent design template, workflow cards, orchestration whiteboard |
 
 (generate ALL modules in this same table, continuing rows until duration sums to total_duration_hours)
+
+====== STRUCTURED DISCOVERY FACTS ======
+The user message may include a "STRUCTURED DISCOVERY FACTS" block — answers from a structured
+discovery questionnaire. These are MORE AUTHORITATIVE than anything you infer from the narrative
+requirement text; if the two conflict, the discovery facts win. Apply each fact to the document as follows:
+- Experience Level -> drives prerequisites (what learners already know) and the complexity/depth of detailed_design.
+- Target Audience -> drives prerequisites and the framing of key_outcomes.
+- Delivery Model -> must be explicitly named in the indicative_design framing paragraph.
+- Expected Learner Count -> must be mentioned (batch/cohort size) in the indicative_design framing paragraph.
+- Domain Focus -> drives topic selection across indicative_design and detailed_design, especially when the
+  narrative text is sparse.
+- Requirement Trigger / Linked Strategic Objective -> drives the business rationale in program_introduction.
+- Expected Business Outcomes -> each one must map to a measurable, action-verb key_outcomes bullet.
+- Known Constraints / Expected Timeline -> note explicitly in program_introduction if they affect scheduling,
+  pacing, or format.
+If a fact is absent from the block, infer that aspect normally from the narrative text instead.
 
 ====== RULES ======
 1. detailed_design is ONE table only — no headings, no sub-tables, no text outside the table.
@@ -134,6 +165,19 @@ class DesignService:
             raise ValueError("Requirement not found")
 
         normalized_requirement = json.loads(requirement.normalized_json)
+
+        discovery_data = normalized_requirement.get("discovery")
+        missing = (
+            DiscoveryAnswers(**discovery_data).missing_questions()
+            if discovery_data
+            else list(DISCOVERY_QUESTION_LABELS.values())
+        )
+        if missing:
+            raise NotQualifiedForDesignError(
+                "This requirement is not qualified for design — the Discovery Questionnaire is incomplete. "
+                f"Missing: {', '.join(missing)}"
+            )
+
         matches = [
             match
             for match in self.similarity_service.find_matches(session, requirement.raw_text)
@@ -385,7 +429,9 @@ class DesignService:
         context = self._build_fallback_context(title, normalized_requirement, best_match)
 
         llm_result = llm.generate(
-            prompt=self._build_llm_user_prompt(title, raw_text, best_match),
+            prompt=self._build_llm_user_prompt(
+                title, raw_text, best_match, normalized_requirement.get("discovery")
+            ),
             system_prompt=_STACKROUTE_SYSTEM_PROMPT,
         )
         if llm_result:
@@ -399,11 +445,15 @@ class DesignService:
         # Normalise table fields — LLMs (especially Groq) sometimes add leading spaces
         # before pipe characters or omit the leading pipe on rows entirely.
         context["detailed_design"] = self._normalise_md_table(context.get("detailed_design", ""))
-        context["indicative_design"] = self._normalise_md_table(context.get("indicative_design", ""))
+        context["indicative_design"] = self._fix_sequence_column(
+            self._normalise_md_table(context.get("indicative_design", ""))
+        )
 
         return template.render(**context)
 
-    def _build_llm_user_prompt(self, title: str, raw_text: str, best_match) -> str:
+    def _build_llm_user_prompt(
+        self, title: str, raw_text: str, best_match, discovery: dict[str, object] | None = None
+    ) -> str:
         """
         User-turn prompt sent to the local Ollama model.
         Provides all available context so the model can generate rich content
@@ -417,9 +467,13 @@ class DesignService:
                 "You may reuse and adapt content where appropriate."
             )
 
+        discovery_facts = build_discovery_facts_block(discovery)
+        discovery_section = f"\n\n{discovery_facts}\n" if discovery_facts else ""
+
         return (
             f"Generate a complete NIIT StackRoute program design document for the requirement below.\n\n"
-            f"Program Title: {title}\n\n"
+            f"Program Title: {title}\n"
+            f"{discovery_section}\n"
             f"Requirement Text (read carefully — use ALL details to populate the design):\n"
             f"{raw_text[:8000]}\n"
             f"{reused_note}\n\n"
@@ -448,6 +502,47 @@ class DesignService:
         except Exception:
             return None
 
+    @staticmethod
+    def _is_separator_row(row: str) -> bool:
+        """True if every non-empty cell contains only dashes and colons (GFM separator)."""
+        cells = [c.strip() for c in row.strip("|").split("|") if c.strip()]
+        return bool(cells) and all(re.match(r"^-+:?$|^:-+:?$|^:?-+$", c) for c in cells)
+
+    def _fix_sequence_column(self, text: str) -> str:
+        """
+        Ensure the first column of any markdown table in text holds sequential
+        integers (1, 2, 3 …). Replaces whatever the LLM put there (e.g. '#').
+        Non-table lines pass through unchanged.
+        """
+        lines = text.splitlines()
+        result = []
+        header_seen = False
+        sep_seen = False
+        row_num = 0
+
+        for line in lines:
+            if not line.strip().startswith("|"):
+                result.append(line)
+                continue
+
+            if self._is_separator_row(line):
+                sep_seen = True
+                result.append(line)
+                continue
+
+            parts = line.strip("|").split("|")
+
+            if not header_seen:
+                parts[0] = " S.No "
+                header_seen = True
+            elif sep_seen:
+                row_num += 1
+                parts[0] = f" {row_num} "
+
+            result.append("|" + "|".join(parts) + "|")
+
+        return "\n".join(result)
+
     def _normalise_md_table(self, text: str) -> str:
         """
         Fix common LLM table formatting issues so the DOCX renderer always sees
@@ -468,33 +563,27 @@ class DesignService:
         for raw_line in lines:
             line = raw_line.strip()
 
-            # Skip empty lines (preserve them outside table blocks)
             if not line:
                 cleaned.append("")
                 continue
 
-            # Detect table rows: contains | (either proper "|col|" or improper "col | col")
             if "|" in line:
-                # Ensure starts and ends with |
                 if not line.startswith("|"):
                     line = "| " + line
                 if not line.endswith("|"):
                     line = line + " |"
                 cleaned.append(line)
 
-                # Track where header is (first table row)
-                if header_index is None and not re.match(r"^\|[-| :]+\|$", line):
+                if header_index is None and not self._is_separator_row(line):
                     header_index = len(cleaned) - 1
             else:
-                # Non-table line (paragraph text in indicative_design, etc.)
                 cleaned.append(line)
-                header_index = None  # reset — new table block may follow
+                header_index = None
 
-        # If we found a header row but no separator immediately follows it, insert one
+        # Insert separator after header if missing
         if header_index is not None:
             sep_index = header_index + 1
-            if sep_index >= len(cleaned) or not re.match(r"^\|[-| :]+\|$", cleaned[sep_index].strip()):
-                # Count columns from header
+            if sep_index >= len(cleaned) or not self._is_separator_row(cleaned[sep_index]):
                 header = cleaned[header_index]
                 n_cols = len(header.strip("|").split("|"))
                 separator = "|" + "|".join(["---"] * n_cols) + "|"
@@ -519,6 +608,7 @@ class DesignService:
         scope_items = [str(item) for item in normalized_requirement.get("scope", [])]
         constraints = [str(item) for item in normalized_requirement.get("constraints", [])]
         source_summary = normalized_requirement.get("source_summary", [])
+        discovery = normalized_requirement.get("discovery") or {}
 
         # Derive program name — strip common suffixes / clean up title
         program_name = title.replace(" - Solution Design", "").replace(" Design", "").strip()
@@ -539,23 +629,32 @@ class DesignService:
             "the program. Upon completion, learners will have a solid foundation to apply their skills in "
             "professional contexts and continue to advanced practice areas."
         )
+        intro_paragraphs = [intro_p1, intro_p2]
+        discovery_intro_clause = build_intro_clause(discovery)
+        if discovery_intro_clause:
+            intro_paragraphs.append(discovery_intro_clause)
 
-        # Build topic list: prefer scope items, fall back to functional requirements
-        topics = scope_items or functional[:8] or ["Core Concepts", "Hands-on Practice", "Assessment"]
+        # Build topic list: prefer scope items, fall back to functional requirements,
+        # then the questionnaire's domain focus before falling back to generic placeholders.
+        topics = scope_items or functional[:8] or discovery.get("domain_focus") or [
+            "Core Concepts", "Hands-on Practice", "Assessment"
+        ]
 
         # Indicative design: paragraph + summary module table
-        indicative = self._build_indicative_table(program_name, topics, total_duration_hours)
+        indicative = self._build_indicative_table(program_name, topics, total_duration_hours, discovery)
 
-        # Prerequisites: from constraints or generic based on topics
-        prereq_items = constraints or [
+        # Prerequisites: blend questionnaire-derived items (audience/experience level) with
+        # narrative-inferred constraints; only fall back to generic defaults if both are empty.
+        prereq_items = dedupe_keep_order(build_prerequisite_items(discovery) + constraints) or [
             "Basic understanding of the subject domain covered in this program",
             "Familiarity with a command-line interface (Linux/macOS/Windows terminal)",
             "Laptop with internet access and at least 8 GB RAM",
         ]
         prerequisites = "\n".join(f"- {item}" for item in prereq_items)
 
-        # Key outcomes: transform functional requirements into learning outcome statements
-        outcomes = self._to_learning_outcomes(functional) or [
+        # Key outcomes: blend functional-requirement-derived outcomes with questionnaire-derived
+        # business outcomes; only fall back to generic defaults if both are empty.
+        outcomes = dedupe_keep_order(self._to_learning_outcomes(functional) + build_outcome_items(discovery)) or [
             "Apply core concepts from the program in practical, real-world scenarios",
             "Demonstrate proficiency with the tools and technologies covered",
             "Design and implement solutions to domain-specific problems",
@@ -569,7 +668,7 @@ class DesignService:
         return {
             "program_name": program_name,
             "total_duration_hours": str(total_duration_hours),
-            "program_introduction": f"{intro_p1}\n\n{intro_p2}",
+            "program_introduction": "\n\n".join(intro_paragraphs),
             "indicative_design": indicative,
             "prerequisites": prerequisites,
             "key_outcomes": key_outcomes,
@@ -602,7 +701,9 @@ class DesignService:
                 outcomes.append(clean)
         return outcomes
 
-    def _build_indicative_table(self, program_name: str, topics: list[str], total_hours: int) -> str:
+    def _build_indicative_table(
+        self, program_name: str, topics: list[str], total_hours: int, discovery: dict[str, object] | None = None
+    ) -> str:
         """
         Build the Indicative Design and Content Coverage section:
         a brief paragraph followed by a module-level summary table.
@@ -612,9 +713,16 @@ class DesignService:
         n = len(topics)
         hours_each = max(2, total_hours // n)
 
-        lines: list[str] = [
+        intro = (
             f"This program — {program_name} — is structured across {n} modules, "
-            f"progressively building from foundational concepts through advanced hands-on practice.",
+            f"progressively building from foundational concepts through advanced hands-on practice."
+        )
+        delivery_clause = build_delivery_clause(discovery)
+        if delivery_clause:
+            intro = f"{intro} {delivery_clause}"
+
+        lines: list[str] = [
+            intro,
             "",
             "| # | Module | Duration (Hours) |",
             "|---|---|---|",
@@ -672,4 +780,5 @@ class DesignService:
                     ),
                 }
             )
-        return {"requirements": traceability}
+        discovery_mappings = build_discovery_traceability(normalized_requirement.get("discovery"))
+        return {"requirements": traceability, "discovery_mappings": discovery_mappings}
